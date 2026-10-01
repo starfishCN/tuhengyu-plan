@@ -5,3 +5,7 @@ venv/
 .env
 *.log
 .DS_Store
+
+# 面板运行时数据与自动生成的密码 —— 绝不能入库
+.panel_pass
+data/

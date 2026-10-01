@@ -44,4 +44,24 @@ python3 -m venv .venv
 ./.venv/bin/pip install -U pip
 ./.venv/bin/pip install -r requirements.txt
 
-echo "[图恒宇] 安装完成。启动：${INSTALL_DIR}/.venv/bin/python ${INSTALL_DIR}/main.py"
+# ---------- 安装 systemd 服务 ----------
+# 面板能执行系统命令（装 Docker、改 daemon.json），**必须**带 Basic 认证。
+# 认证靠 PANEL_USER / PANEL_PASS 两个环境变量传入 —— 仓库里的
+# deploy/tuhengyu-panel.service 已经包含这两行，**直接用它，不要手写**。
+# 手写很容易漏掉 Environment，漏了面板就不会弹登录框（= 无密码运行）。
+SERVICE=/etc/systemd/system/tuhengyu-panel.service
+if [ -f "${SERVICE}" ]; then
+  systemctl restart tuhengyu-panel
+  echo "[图恒宇] systemd 服务已存在，已重启"
+else
+  cp "${INSTALL_DIR}/deploy/tuhengyu-panel.service" "${SERVICE}"
+  systemctl daemon-reload
+  systemctl enable --now tuhengyu-panel
+  echo "[图恒宇] systemd 服务已安装并启动"
+fi
+
+echo "[图恒宇] 安装完成。"
+echo "[图恒宇]   面板地址：http://<你的服务器IP>:8080"
+echo "[图恒宇]   默认账号：admin / Tuhengyu2026"
+echo "[图恒宇]   ⚠️ 请尽快修改默认密码（编辑 ${SERVICE} 里的 PANEL_PASS）"
+echo "[图恒宇]   查看状态：systemctl status tuhengyu-panel"

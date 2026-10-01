@@ -14,6 +14,7 @@ import base64
 import html as _html
 import json
 import os
+import secrets
 
 from nicegui import app, ui
 from fastapi.responses import Response as _Resp
@@ -488,8 +489,63 @@ def index():
 
 
 # ---------- 认证：面板能执行命令，公网暴露前必须挡一道 ----------
-PANEL_USER = os.environ.get("PANEL_USER", "admin")
-PANEL_PASS = os.environ.get("PANEL_PASS", "")
+#
+# 安全默认（2026-10-01 补）：
+#   原来若没设 PANEL_PASS，中间件直接放行 —— 也就是**没有登录框**。
+#   而面板能执行任意系统命令（装 Docker、改 daemon.json），
+#   公网暴露等于把 root 挂上网。多次实测确认过这个洞。
+#
+#   现在改为三级回退，保证「绝不会无密码运行」：
+#     1. 环境变量 PANEL_PASS（systemd / 手动）
+#     2. 安装目录下的 .panel_pass 文件（首次自动生成并保存，重启后不变）
+#     3. 实在存不下（只读目录）→ 用内存里的随机值，并明确警告会变
+
+PANEL_USER = os.environ.get("PANEL_USER", "admin") or "admin"
+_PASS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".panel_pass")
+
+
+def _resolve_panel_pass() -> str:
+    env = os.environ.get("PANEL_PASS", "").strip()
+    if env:
+        return env
+
+    if os.path.exists(_PASS_FILE):
+        try:
+            with open(_PASS_FILE, encoding="utf-8") as f:
+                saved = f.read().strip()
+            if saved:
+                return saved
+        except OSError:
+            pass
+
+    generated = secrets.token_urlsafe(12)
+    try:
+        with open(_PASS_FILE, "w", encoding="utf-8") as f:
+            f.write(generated)
+        os.chmod(_PASS_FILE, 0o600)
+    except OSError as exc:
+        print(f"[图恒宇] 警告：无法保存自动生成的密码（{exc}），本次重启后会变。")
+    return generated
+
+
+PANEL_PASS = _resolve_panel_pass()
+
+
+def _announce_password() -> None:
+    """没走环境变量时，把自动生成的密码明确打出来，别让人找不到。"""
+    if os.environ.get("PANEL_PASS", "").strip():
+        return
+    print("=" * 64)
+    print("[图恒宇] 未通过环境变量设置面板密码。")
+    print(f"[图恒宇] 已自动生成并写入：{_PASS_FILE}")
+    print(f"[图恒宇]   用户名: {PANEL_USER}")
+    print(f"[图恒宇]   密  码: {PANEL_PASS}")
+    print("[图恒宇] 想换成自己的密码：编辑 /etc/systemd/system/tuhengyu-panel.service")
+    print("[图恒宇]   里的 PANEL_PASS，再 systemctl daemon-reload && systemctl restart tuhengyu-panel")
+    print("=" * 64)
+
+
+_announce_password()
 
 
 @app.middleware("http")
