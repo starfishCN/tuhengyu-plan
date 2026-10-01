@@ -76,14 +76,15 @@ class TuhengyuPlugin(Star):
         try:
             from .core.llm import generate_moment_text
 
-            content = await generate_moment_text(self.context, self.config)
+            st = self._scheduler.schedule.state_at()
+            content = await generate_moment_text(self.context, self.config, st.now_line())
             if not content:
                 yield event.plain_result("[图恒宇] 内容生成失败：没有可用模型，看日志。")
                 return
             ok = await self._scheduler._post_moment(content)
             if ok:
                 self._scheduler._last_moment = datetime.now()
-                yield event.plain_result(f"[图恒宇] 已发布：{content}")
+                yield event.plain_result(f"[图恒宇] 已发布（此刻：{st.brief()}）：{content}")
             else:
                 yield event.plain_result("[图恒宇] 发布失败，看 AstrBot 日志里的 [图恒宇] 行。")
         except Exception as e:

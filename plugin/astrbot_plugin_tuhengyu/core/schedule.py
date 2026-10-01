@@ -38,6 +38,10 @@ class ScheduleState:
     def brief(self) -> str:
         return f"{'醒着' if self.awake else '睡着'} · {self.scene} · {self.state}"
 
+    def now_line(self) -> str:
+        """给内容生成用的一行「此刻」，让生成的东西贴得上现在的状态。"""
+        return f"正在{self.scene}（心情：{self.state}）"
+
 
 def parse_hhmm(s) -> dtime | None:
     try:

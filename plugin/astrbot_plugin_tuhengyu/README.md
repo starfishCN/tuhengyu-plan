@@ -3,18 +3,22 @@
 给 bot「完整的一生」。第一版：**作息 + 调度器 + 发 QQ 空间**。
 
 - 包名：`astrbot_plugin_tuhengyu`
-- 版本：0.2.0
+- 版本：0.2.1
 - 支持平台：`aiocqhttp`（OneBot v11）
 - 许可：待定（见项目 README）
 
 ## 它做什么
 
-调度器按「作息 + 检查间隔 + 概率」决定何时行动。每次行动时：
+调度器按「作息 + 检查间隔 + 概率」决定何时行动。作息**跟人设走**：
+首次启动读人设，让模型推一份一天的作息存盘，之后只读盘（不烧 token）。
+空人设或生成失败 → 保守默认（09:00–23:00 醒）。
 
-1. 用 AstrBot 里配好的模型生成一条说说内容
-2. 通过 OneBot 向协议端要 QQ 空间 cookie
-3. 算 g_tk，POST 到空间接口
-4. 发出去
+每次行动时：
+
+1. 看此刻在干嘛（作息给的 scene / state）
+2. 按状态给触发概率加权（在忙少动，闲着多动）
+3. 用 AstrBot 里配好的模型生成一条说说内容（**带上「此刻」**，所以发的不是凭空的话）
+4. 通过 OneBot 向协议端要 QQ 空间 cookie，算 g_tk，POST 到空间接口
 
 **不需要你额外配模型 key** —— 直接用 AstrBot 的。
 
@@ -47,19 +51,27 @@ Plugin astrbot_plugin_tuhengyu (0.2.0) by starfishCN
 
 ## 配置
 
-在 AstrBot WebUI 的插件配置页改：
+在 AstrBot WebUI 的插件配置页改。配置按分组折叠：
 
-| 键 | 说明 | 默认 |
-|---|---|---|
-| `enabled` | 总开关 | `true` |
-| `active_hours` | 活跃时段，如 `09:00-23:00`；多段用英文逗号分隔 | `09:00-23:00` |
-| `check_interval_minutes` | 调度器多久检查一次 | `30` |
-| `act_probability` | 每次检查触发行动的概率 | `0.15` |
-| `moment_enabled` | 是否允许发空间 | `true` |
-| `moment_min_interval_hours` | 两次发空间的最小间隔（小时） | `6` |
-| `llm_provider_id` | 用哪个模型生成内容，留空用 AstrBot 当前默认 | 空 |
-| `persona_prompt` | **人设** —— 告诉它「你是谁」，想让它像某个角色就写在这 | 空 |
-| `moment_prompt` | 发说说时给模型的指令 | 空 |
+| 分组 | 键 | 说明 | 默认 |
+|---|---|---|---|
+| — | `enabled` | 总开关 | `true` |
+| — | `persona_prompt` | **人设** —— 告诉它「你是谁」，作息和说说内容都由它决定 | 空 |
+| `chat_private` | `enabled` / `prompt` / `model` | 私聊场景说明与模型 | 开 |
+| `chat_group` | `enabled` / `prompt` / `model` | 群聊场景说明与模型 | 开 |
+| `schedule` | `auto_generate` | 按人设自动生成作息 | `true` |
+| `schedule` | `manual_hours` | 手动作息，如 `09:00-23:00`（关自动生成时生效） | `09:00-23:00` |
+| `schedule` | `generate_model` | 生成作息用的模型，留空用 AstrBot 当前默认 | 空 |
+| `scheduler` | `check_interval_minutes` | 调度器多久检查一次 | `30` |
+| `scheduler` | `act_probability` | 每次检查触发行动的**基础**概率 | `0.15` |
+| `scheduler` | `state_bias` | 按此刻状态加权（忙 0.35 倍 / 闲 1.6 倍，封顶 0.9） | `true` |
+| `moment` | `enabled` | 是否允许发空间 | `true` |
+| `moment` | `min_interval_hours` | 两次发空间的最小间隔（小时） | `6` |
+| `moment` | `prompt` | 发说说时给模型的指令 | 空 |
+| `moment` | `provider_id` | 生成说说内容的模型，留空用 AstrBot 当前默认 | 空 |
+
+> ⚠️ 这些是**嵌套键**（`schedule.manual_hours` 这种），不是扁平 key。
+> 0.2.0 之前的旧配置名（`active_hours` / `moment_enabled` 等）已废弃，需重填一次。
 
 ### 人设怎么填
 
@@ -94,7 +106,7 @@ QQ 客户端登录态就在协议端里，`get_cookies` 动作能把它吐出来
 - 发表情包
 - 主动发言（私聊/群聊的第一句话）
 - 怼人时机
-- 更像人的作息（现在是固定时段 + 随机）
+- 作息改动后自动重算已有内存副本（现在人设变了要重启插件才重读）
 
 ## 已知问题
 

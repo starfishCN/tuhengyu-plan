@@ -40,8 +40,19 @@ def _section(config: dict, name: str) -> dict:
     return v if isinstance(v, dict) else {}
 
 
-async def generate_moment_text(context, config: dict) -> str:
-    """生成一条说说内容。失败返回空串。"""
+def with_state(prompt: str, state_line: str) -> str:
+    """把「此刻在干嘛」拼到指令尾部。没给状态就原样返回。"""
+    line = (state_line or "").strip()
+    if not line:
+        return prompt
+    return f"{prompt}\n\n此刻你{line}，内容要跟这个时刻对得上。"
+
+
+async def generate_moment_text(context, config: dict, state_line: str = "") -> str:
+    """生成一条说说内容。失败返回空串。
+
+    state_line：来自作息的「此刻」描述。有它，内容才不是凭空写的。
+    """
     moment = _section(config, "moment")
     provider_id = await resolve_provider_id(
         context, str(moment.get("provider_id", "")).strip()
@@ -51,7 +62,7 @@ async def generate_moment_text(context, config: dict) -> str:
         return ""
 
     system_prompt = str(config.get("persona_prompt", "")).strip() or DEFAULT_SYSTEM_PROMPT
-    prompt = str(moment.get("prompt", "")).strip() or DEFAULT_PROMPT
+    prompt = with_state(str(moment.get("prompt", "")).strip() or DEFAULT_PROMPT, state_line)
 
     try:
         resp = await context.llm_generate(

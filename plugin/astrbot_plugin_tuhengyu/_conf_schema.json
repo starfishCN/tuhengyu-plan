@@ -95,6 +95,7 @@
   "scheduler": {
     "type": "object",
     "description": "[调度] 多久检查一次「现在该不该做点什么」",
+    "hint": "决定它多久动一次。真正的触发概率 = 下面的概率 × 此刻状态加权（在忙就更少动，闲着才多动）。",
     "items": {
       "check_interval_minutes": {
         "type": "int",
@@ -103,8 +104,14 @@
       },
       "act_probability": {
         "type": "float",
-        "description": "每次检查触发行动的概率（0-1）",
+        "description": "每次检查触发行动的基础概率（0-1）",
         "default": 0.15
+      },
+      "state_bias": {
+        "type": "bool",
+        "description": "按「此刻在干嘛」调整触发概率",
+        "hint": "开启：在忙 / 上班 / 学习时概率降到 0.35 倍，闲着 / 放松 / 夜里升到 1.6 倍（最高封顶 0.9）。关闭：任何时刻都按基础概率掷。",
+        "default": true
       }
     }
   },
