@@ -54,11 +54,27 @@ LOGO_SVG = """
 """
 
 CSS = """
-/* ---------- 基础：防白闪 ----------
+/* ---------- 基础：防白闪 + 背景光斑 ----------
    页面加载瞬间会先显示浏览器默认背景。深色面板上那是一道刺眼的白闪，
-   所以在 html 层就压住底色；浅色模式交给 Quasar 的 body--light 覆盖。 */
+   所以在 html 层就压住底色。
+   body 上的两团光斑不只是装饰 —— 按钮的毛玻璃（backdrop-filter）需要
+   背后有明暗变化才看得出来，纯色背景上它等于没有效果。 */
 html { background-color: #0b1020; }
-body.body--light { background-color: #f1f5f9; }
+body {
+  background-color: #0b1020;
+  background-image:
+    radial-gradient(1100px 700px at 12% -5%, rgba(34,211,238,.10), transparent 55%),
+    radial-gradient(900px 700px at 88% -12%, rgba(129,140,248,.13), transparent 55%),
+    radial-gradient(800px 600px at 50% 115%, rgba(56,189,248,.07), transparent 60%);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+body.body--light {
+  background-color: #f1f5f9;
+  background-image:
+    radial-gradient(1100px 700px at 12% -5%, rgba(34,211,238,.14), transparent 55%),
+    radial-gradient(900px 700px at 88% -12%, rgba(129,140,248,.16), transparent 55%);
+}
 
 /* ---------- 入场动画 ----------
    为什么改了三版（记下来，免得下次又走回头路）：
@@ -88,15 +104,18 @@ body.body--light { background-color: #f1f5f9; }
    起手不猛、收尾柔和。 */
 
 @keyframes tg-force {
-  to { opacity: 1; transform: translateY(0); }
+  to { opacity: 1; filter: blur(0); }
 }
 
+/* 不用位移，只用 opacity + blur —— 模糊逐渐收实，就是「凝聚成形」的感觉。
+   filter 只在「未放行」状态下声明，放行后回到默认的 none，
+   这样动画结束后元素身上没有 filter，不会影响内部按钮的 backdrop-filter。 */
 .tg-brand,
 .tg-main > * {
-  transition: opacity .8s cubic-bezier(.16,.84,.44,1),
-              transform .8s cubic-bezier(.16,.84,.44,1);
+  transition: opacity 1.2s cubic-bezier(.25,.46,.45,.94),
+              filter 1.2s cubic-bezier(.25,.46,.45,.94);
 }
-/* 卡片错开，形成自上而下的扫入感 */
+/* 卡片错开，像一层层凝出来 */
 .tg-main > *:nth-child(1) { transition-delay: .1s; }
 .tg-main > *:nth-child(2) { transition-delay: .2s; }
 .tg-main > *:nth-child(3) { transition-delay: .3s; }
@@ -105,8 +124,8 @@ body.body--light { background-color: #f1f5f9; }
 .tg-main > *:nth-child(6) { transition-delay: .6s; }
 .tg-main > *:nth-child(n+7) { transition-delay: .68s; }
 
-html:not(.tg-in) .tg-brand { opacity: 0; transform: translateY(24px); }
-html:not(.tg-in) .tg-main > * { opacity: 0; transform: translateY(24px); }
+html:not(.tg-in) .tg-brand { opacity: 0; filter: blur(6px); }
+html:not(.tg-in) .tg-main > * { opacity: 0; filter: blur(6px); }
 
 /* 兜底：脚本若没跑，3 秒后强制显示（否则会一直停在透明状态） */
 html:not(.tg-in) .tg-brand,
@@ -136,13 +155,31 @@ html:not(.tg-in) .tg-main > * {
   box-shadow: 0 8px 28px rgba(0,0,0,.10) !important;
 }
 
-/* ---------- 步骤按钮 ---------- */
+/* ---------- 步骤按钮：毛玻璃 ---------- */
 .tg-step {
   border-radius: 12px !important;
   text-transform: none !important;
   font-weight: 600 !important;
   letter-spacing: .01em !important;
+  /* 半透明渐变 + 背后模糊 = 玻璃质感。
+     渐变做出「上缘受光」的错觉，内阴影补一道高光边。 */
+  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.035)) !important;
+  border: 1px solid rgba(255,255,255,.14) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.13),
+    0 4px 14px rgba(0,0,0,.22) !important;
+  backdrop-filter: blur(10px) saturate(150%);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  transition: background .2s, border-color .2s, box-shadow .2s !important;
 }
+.tg-step:hover {
+  background: linear-gradient(180deg, rgba(255,255,255,.15), rgba(255,255,255,.06)) !important;
+  border-color: rgba(34,211,238,.38) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.18),
+    0 6px 20px rgba(34,211,238,.14) !important;
+}
+.tg-step:active { transform: translateY(1px); }
 
 /* 图标与中文混排的对齐：
    Material Icons 的字形基线是按英文调的，与中文并排时容易显得上下不齐。
@@ -203,12 +240,19 @@ html:not(.tg-in) .tg-main > * {
 }
 .tg-port { opacity: .6; font-family: ui-monospace, monospace; white-space: nowrap; }
 .tg-copy {
-  border: 1px solid rgba(148,163,184,.35);
-  background: transparent; color: inherit;
+  border: 1px solid rgba(255,255,255,.16);
+  background: linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.03));
+  backdrop-filter: blur(8px) saturate(140%);
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
+  color: inherit;
   border-radius: 8px; padding: 4px 11px; font-size: .8rem; cursor: pointer;
   transition: all .15s; white-space: nowrap;
 }
-.tg-copy:hover { border-color: #22d3ee; color: #22d3ee; }
+.tg-copy:hover {
+  border-color: rgba(34,211,238,.5);
+  color: #22d3ee;
+  background: linear-gradient(180deg, rgba(34,211,238,.12), rgba(34,211,238,.04));
+}
 .tg-copy:active { transform: scale(.95); }
 .tg-none { opacity: .45; }
 .tg-note {
