@@ -199,9 +199,35 @@ function reschedule() {
   });
 }
 
+// 「测试发一条」会真发空间动态，需要确认。
+// 注意：插件页跑在 AstrBot 的受限 iframe 里，sandbox 不含 allow-modals，
+// window.confirm() 会被浏览器静默忽略并返回 false —— 所以这里用「页内两步确认」，
+// 第一次点变成「再点一次确认发送」，第二次点才真正发出去；8 秒不点自动还原。
+const CONFIRM_LABEL = "再点一次确认发送";
+const TEST_LABEL = "测试发一条";
+let testArmed = false;
+let testArmTimer = null;
+
+function disarmTest() {
+  testArmed = false;
+  if (testArmTimer) {
+    clearTimeout(testArmTimer);
+    testArmTimer = null;
+  }
+  const btn = $("test-moment");
+  if (btn) btn.textContent = TEST_LABEL;
+}
+
 function testMoment() {
-  const ok = window.confirm("这会真的往 QQ 空间发一条动态。确定要继续吗？");
-  if (!ok) return;
+  if (!testArmed) {
+    testArmed = true;
+    const btn = $("test-moment");
+    if (btn) btn.textContent = CONFIRM_LABEL;
+    showNotice("这会真的往 QQ 空间发一条动态。再点一次该按钮确认，8 秒内有效。", true);
+    testArmTimer = setTimeout(disarmTest, 8000);
+    return;
+  }
+  disarmTest();
   return withButton("test-moment", "正在生成并发布，稍等……", async () => {
     try {
       const data = await bridge.apiPost("test-moment", {});
@@ -218,7 +244,7 @@ function bind() {
   $("refresh")?.addEventListener("click", refresh);
   $("reschedule")?.addEventListener("click", reschedule);
   $("test-moment")?.addEventListener("click", testMoment);
-  bridge.onContext?.(() => {
+  bridge?.onContext?.(() => {
     document.title = bridge.t?.("pages.status.title", "图恒宇 · 运行状态") ?? document.title;
   });
 }
