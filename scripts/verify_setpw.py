@@ -10,8 +10,7 @@ P = Path("/AstrBot/data/cmd_config.json")
 BAK = Path("/AstrBot/data/cmd_config.json.bak_verify")
 
 if sys.argv[1] == "set":
-    if not BAK.exists():
-        shutil.copy2(P, BAK)
+    shutil.copy2(P, BAK)  # 每次都刷新备份，避免用到过期副本
     d = json.loads(P.read_text(encoding="utf-8-sig"))
     d.setdefault("dashboard", {})
     d["dashboard"]["pbkdf2_password"] = hash_dashboard_password("VerifyTmp2026a")
