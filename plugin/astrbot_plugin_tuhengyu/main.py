@@ -142,6 +142,8 @@ class TuhengyuPlugin(Star):
         sec = sec if isinstance(sec, dict) else {}
         if not sec.get("enabled", True):
             return
+        if sec.get("send_separate", False):
+            return  # 单独发模式：这里不附，交给 after_message_sent 另发一条
         try:
             prob = float(sec.get("probability", 0.35))
         except (TypeError, ValueError):
@@ -156,7 +158,7 @@ class TuhengyuPlugin(Star):
         except Exception:
             reply_text = ""
         st = self._scheduler.schedule.state_at()
-        path = self._scheduler.pick_sticker(f"{st.scene}{st.state}{reply_text}")
+        path = self._scheduler.pick_sticker(f"{reply_text}{st.scene}{st.state}")
         if path is None:
             return
         b64 = read_base64(path)
@@ -165,6 +167,47 @@ class TuhengyuPlugin(Star):
         from astrbot.api.message_components import Image
 
         result.chain.append(Image.fromBase64(b64))
+
+    # ---------- 回复后单独发一条表情包 ----------
+    @filter.after_message_sent()
+    async def send_sticker_separately(self, event: AstrMessageEvent):
+        """单独发模式：bot 回复发出后，按概率再发一条只含表情包的消息。
+
+        与 attach_sticker 互斥（靠 sticker.send_separate 分流）：关时这里是空的。
+        选图与概率同 attach_sticker，保持两条路径口径一致。
+        """
+        if self._scheduler is None:
+            return
+        sec = self.config.get("sticker") if isinstance(self.config, dict) else None
+        sec = sec if isinstance(sec, dict) else {}
+        if not sec.get("enabled", True):
+            return
+        if not sec.get("send_separate", False):
+            return
+        try:
+            prob = float(sec.get("probability", 0.35))
+        except (TypeError, ValueError):
+            prob = 0.35
+        if prob <= 0 or random.random() > prob:
+            return
+        try:
+            reply_text = event.get_result().get_plain_text()
+        except Exception:
+            reply_text = ""
+        st = self._scheduler.schedule.state_at()
+        path = self._scheduler.pick_sticker(f"{reply_text}{st.scene}{st.state}")
+        if path is None:
+            return
+        b64 = read_base64(path)
+        if not b64:
+            return
+        from astrbot.api.event import MessageChain
+        from astrbot.api.message_components import Image
+
+        try:
+            await event.send(MessageChain([Image.fromBase64(b64)]))
+        except Exception as e:  # 发送失败不影响主回复
+            self.logger.warning(f"[图恒宇] 单独发表情包失败：{e}")
 
     # ---------- 对话中自动收集表情包 ----------
     @filter.event_message_type(EventMessageType.ALL)
@@ -311,7 +354,7 @@ class TuhengyuPlugin(Star):
             return error_response("调度器未运行（插件可能被禁用）", status_code=409)
         lib = self._scheduler.stickers
         try:
-            groups = lib.groups()
+            groups = lib.groups_by_emotion()
         except Exception as e:
             return error_response(f"读取表情包失败：{e}", status_code=500)
 
@@ -321,15 +364,15 @@ class TuhengyuPlugin(Star):
         total = 0
         truncated = False
         out = []
-        for label in sorted(groups):
-            paths = sorted(groups[label], key=lambda p: p.name)
+        for label, items in groups.items():
+            pairs = sorted(items, key=lambda tp: tp[1].name)
             images = []
-            for p in paths:
+            for tag, p in pairs:
                 try:
                     size = p.stat().st_size
                 except OSError:
                     continue
-                item = {"name": p.name, "size": size}
+                item = {"name": p.name, "size": size, "tag": tag}
                 if total >= max_total:
                     item["skipped"] = True
                     truncated = True
@@ -358,7 +401,7 @@ class TuhengyuPlugin(Star):
                     item["skipped"] = True
                     truncated = True
                 images.append(item)
-            out.append({"label": label, "count": len(paths), "images": images})
+            out.append({"label": label, "count": len(pairs), "images": images})
 
         return json_response(
             {

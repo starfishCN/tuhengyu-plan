@@ -160,9 +160,10 @@ function render(data) {
 
   text("sticker", data.sticker_enabled ? "开" : "关");
   const sp = Number(data.sticker_probability);
+  const mode = data.sticker_separate ? "单独发" : "一起发";
   text(
     "sticker-detail",
-    `${data.sticker_desc ?? DASH}（每条 ${Number.isFinite(sp) ? (sp * 100).toFixed(0) : DASH}%）`,
+    `${data.sticker_desc ?? DASH}（${mode} · 每条 ${Number.isFinite(sp) ? (sp * 100).toFixed(0) : DASH}%）`,
   );
 
   renderPeriods(data.periods);

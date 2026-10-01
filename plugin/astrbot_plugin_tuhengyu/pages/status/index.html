@@ -160,8 +160,9 @@
         <section class="panel">
           <h2>表情包库</h2>
           <p class="set-tip">
-            按情绪（目录名）分类。子目录名就是分类，例：<code>stickers/开心/a.png</code>；
-            直接放在 <code>stickers/</code> 下的散图归「default」。对话里收到的图自动进 <code>collected</code>。
+            按情绪分类，类目固定：<code>开心 / 难过 / 生气 / 惊讶 / 无语 / 害羞</code>。
+            子目录名就是情绪，例：<code>stickers/开心/a.png</code>；放不进这些目录的（含散图、对话里收到的图）归「其他」。
+            bot 回复时按这条回复的情绪，从同名目录里挑图。
           </p>
           <div class="sticker-bar">
             <span id="sticker-summary" class="card-hint">读取中 …</span>

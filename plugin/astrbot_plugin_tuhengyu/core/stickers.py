@@ -4,11 +4,13 @@
     assets/stickers/<标签>/xxx.png     → 标签 = 子目录名
     assets/stickers/xxx.png            → 标签 = default（散图）
 
-选图优先级：
-    ① 传入文本（此刻的作息场景/心情 + 本条回复正文）里出现某标签名 → 该标签随机一张
-    ② 否则用 default 标签（散图）
-    ③ 再否则从全部里随机
-    ④ 一张图都没有 → None
+选图优先级（prefer_emotion=True 时）：
+    ① 先按「AI 此刻的情绪」定位目录 —— 用 core/emotion.py 的关键词规则，
+       从传入文本里判出情绪类目（开心/难过/…），目录同名就随机取一张
+    ② 否则标签名出现在文本里 → 该标签随机一张
+    ③ 再否则用 default 标签（散图）
+    ④ 再否则从全部里随机
+    ⑤ 一张图都没有 → None
 
 “匹配”就是子串命中，确定性、零成本。标签命名尽量用词面直白的词
 （开心 / 困 / 无语 / 摸鱼…），命中率就高。要更聪明可在上层加一次
@@ -20,6 +22,10 @@ import hashlib
 import logging
 import random
 from pathlib import Path
+
+from .emotion import FALLBACK as EMOTION_FALLBACK
+from .emotion import detect as detect_emotion
+from .emotion import labels as emotion_labels
 
 logger = logging.getLogger("astrbot")
 
@@ -73,20 +79,43 @@ class StickerLibrary:
         """按标签分组返回副本（供页面展示，外部改动不影响索引）。"""
         return {lab: list(paths) for lab, paths in self._index.items()}
 
+    def groups_by_emotion(self) -> dict[str, list[tuple[str, Path]]]:
+        """按情绪类目归并各标签目录 —— 「不需要太细分」。
+
+        返回 {情绪类目: [(原始标签, 路径), ...]}。目录名正好是情绪名的，
+        进对应类目；其余（default / collected / 自定义名）一律进「其他」。
+        空类目不返回。顺序即 emotion.labels() 的顺序。
+        """
+        buckets: dict[str, list[tuple[str, Path]]] = {lab: [] for lab in emotion_labels()}
+        for lab, paths in self._index.items():
+            bucket = lab if lab in buckets else EMOTION_FALLBACK
+            for p in paths:
+                buckets[bucket].append((lab, p))
+        return {lab: items for lab, items in buckets.items() if items}
+
     # ---------- 挑一张 ----------
-    def pick(self, context_text: str = "") -> Path | None:
-        """按传入文本挑一张。文本为空则退到 default / 全部随机。"""
+    def pick(self, context_text: str = "", prefer_emotion: bool = True) -> Path | None:
+        """按传入文本挑一张。文本为空则退到 default / 全部随机。
+
+        prefer_emotion=True 时先按文本判出的「情绪」选目录（目录名 = 情绪名），
+        这一步没命中再走原有的标签子串 → default → 全部随机。
+        """
         if not self._index:
             return None
         text = str(context_text or "").lower()
-        # ① 标签名出现在文本里（default 不参与这一层）
+        # ① AI 此刻的情绪（关键词规则，零 token）
+        if prefer_emotion:
+            emo = detect_emotion(text)
+            if emo and emo in self._index:
+                return random.choice(self._index[emo])
+        # ② 标签名出现在文本里（default 不参与这一层）
         hit = [lab for lab in self._index if lab != DEFAULT_LABEL and lab.lower() in text]
         if hit:
             return random.choice(self._index[random.choice(hit)])
-        # ② default（散图）
+        # ③ default（散图）
         if DEFAULT_LABEL in self._index:
             return random.choice(self._index[DEFAULT_LABEL])
-        # ③ 全部随机
+        # ④ 全部随机
         everything = [p for paths in self._index.values() for p in paths]
         return random.choice(everything) if everything else None
 

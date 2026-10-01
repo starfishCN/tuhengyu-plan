@@ -181,19 +181,31 @@
   "sticker": {
     "type": "object",
     "description": "[表情包] 回复时随机附一张图",
-    "hint": "把图放进插件数据目录的 stickers/ 里，子目录名就是标签（例：stickers/开心/a.png）。不接向量库、不烧 token：按「标签名是否出现在本条对话内容 / 此刻状态里」挑图；没有命中就发 default 里的散图。",
+    "hint": "把图放进插件数据目录的 stickers/ 里，子目录名就是情绪（例：stickers/开心/a.png）。可用类目：开心 / 难过 / 生气 / 惊讶 / 无语 / 害羞；放不进这些目录的（含 collected）归「其他」。不接向量库、不烧 token：先判 AI 这条回复的情绪，从同名目录挑图；没有对应目录再退到标签名 / default / 全部随机。",
     "items": {
       "enabled": {
         "type": "bool",
         "description": "启用表情包附带",
-        "hint": "开启后，bot 每次回复有概率在末尾带一张表情包。库为空时什么都不做。",
+        "hint": "开启后，bot 每次回复有概率带一张表情包。库为空时什么都不做。",
         "default": true
       },
       "probability": {
         "type": "float",
         "description": "每条回复附带表情包的概率（0-1）",
-        "hint": "默认 0.35。调太高会每条都发图，像刷屏。",
+        "hint": "默认 0.35。调太高会每条都发图，像刷屏；调低更矜持。",
         "default": 0.35
+      },
+      "emotion_match": {
+        "type": "bool",
+        "description": "按 AI 的情绪挑图",
+        "hint": "开启（默认）：先判 AI 这条回复的情绪（开心 / 难过 / 生气 / 惊讶 / 无语 / 害羞），从同名目录里挑。关闭：退回「标签名出现在文本里就挑那一类」。",
+        "default": true
+      },
+      "send_separate": {
+        "type": "bool",
+        "description": "表情包单独发一条",
+        "hint": "关（默认）：表情包跟在 bot 文字回复的末尾，是同一条消息。开：文字回完，再单独发一条只含表情包的消息。",
+        "default": false
       },
       "collect_enabled": {
         "type": "bool",

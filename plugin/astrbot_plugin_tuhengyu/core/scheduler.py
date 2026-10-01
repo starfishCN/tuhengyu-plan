@@ -110,9 +110,14 @@ class LifeScheduler:
         return [Path(data_dir) / "stickers", plugin_root / "assets" / "stickers"]
 
     def pick_sticker(self, context_text: str = ""):
-        """按文本挑一张表情包；库为空或出错返回 None。"""
+        """按文本挑一张表情包；库为空或出错返回 None。
+
+        prefer_emotion 由配置 sticker.emotion_match 控制（默认开）。
+        """
         try:
-            return self.stickers.pick(context_text)
+            sec = _section(self.config, "sticker")
+            prefer = bool(sec.get("emotion_match", True))
+            return self.stickers.pick(context_text, prefer_emotion=prefer)
         except Exception as e:
             logger.warning(f"[图恒宇] 挑表情包失败：{e}")
             return None
@@ -234,6 +239,8 @@ class LifeScheduler:
             "last_moment": self._last_moment.strftime("%Y-%m-%d %H:%M:%S") if self._last_moment else None,
             "sticker_enabled": bool(_section(self.config, "sticker").get("enabled", True)),
             "sticker_probability": _section(self.config, "sticker").get("probability", 0.35),
+            "sticker_separate": bool(_section(self.config, "sticker").get("send_separate", False)),
+            "sticker_emotion_match": bool(_section(self.config, "sticker").get("emotion_match", True)),
             "sticker_desc": self.stickers.describe(),
         }
 
