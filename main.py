@@ -29,6 +29,7 @@ from core.snowluma import snowluma_cmds
 from core.astrbot import ASTRBOT_CMDS
 from core import sources
 from core import credentials
+from core.plugin import PLUGIN_INSTALL_CMDS
 
 STATE = {"busy": False, "mirror": None, "proxy": None}
 LOG = None
@@ -628,6 +629,11 @@ def index():
                     "⑤ 连线（待实现）",
                     icon="link_off",
                     on_click=lambda: ui.notify("待实现", type="info"),
+                ).classes("tg-step")
+                ui.button(
+                    "⑥ 装配套插件",
+                    icon="extension",
+                    on_click=_handler("装配套插件", PLUGIN_INSTALL_CMDS),
                 ).classes("tg-step")
 
         with ui.expansion("网络源（测速 / 自动选优）", icon="tune", value=True).classes(
