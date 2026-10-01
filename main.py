@@ -11,10 +11,13 @@ v0.3（2026-10-01）：界面重做 —— 深色主题、响应式（手机可�
 """
 import asyncio
 import base64
+import hashlib
+import hmac
 import html as _html
 import json
 import os
 import secrets
+import urllib.parse
 
 from nicegui import app, ui
 from fastapi.responses import Response as _Resp
@@ -417,6 +420,11 @@ def credential_section():
 
 # ---------------------------------------------------------------- 首页
 
+async def _logout() -> None:
+    # 清 Cookie 必须由服务端做，所以整页跳转；不能用 SPA 路由（那不会发请求）
+    await ui.run_javascript("window.location.href = '/logout';")
+
+
 @ui.page("/")
 def index():
     global LOG
@@ -433,6 +441,9 @@ def index():
         ui.button(icon="contrast", on_click=ui.dark_mode().toggle).props(
             "flat round dense"
         ).tooltip("切换深浅色")
+        ui.button(icon="logout", on_click=_logout).props(
+            "flat round dense"
+        ).tooltip("退出登录")
 
     # 主区
     with ui.column().classes("w-full max-w-5xl mx-auto gap-4 p-4"):
@@ -548,19 +559,168 @@ def _announce_password() -> None:
 _announce_password()
 
 
+# ---------------------------------------------------------------- 认证
+#
+# 为什么不用 HTTP Basic Auth（2026-10-01 改）：
+#   Basic Auth 的登录框由**浏览器**绘制，样式完全不可控 —— 在深色面板上
+#   突然弹出一个系统样式的白框，观感断裂。而且它每个请求都要重发明文凭据。
+#
+# 现在改为：自建登录页 + HMAC 签名会话 Cookie。
+#   · 未登录的页面请求        → 303 跳 /login
+#   · 密码正确                → 下发 HttpOnly 会话 Cookie（7 天）
+#   · 密钥由 PANEL_PASS 派生  → 改密码即让全部旧会话立即失效
+#
+# 放行边界（写错会「裸奔」或「自我锁死」）：
+#   · /login /logout          放行 —— 登录页本身是纯 HTML，不依赖 NiceGUI
+#   · /_nicegui/ 静态资源     放行 —— 只是 JS / CSS / 字体文件，无机密
+#   · /socket.io 实时通道     **必须带 Cookie** —— 页面数据走这条通道推送，
+#                             拦不住它等于没拦。
+#   · 其余一切                必须带 Cookie，否则跳登录页
+
+COOKIE_NAME = "tg_session"
+_SESSION_TOKEN = hmac.new(
+    hashlib.sha256(f"tuhengyu|{PANEL_PASS}".encode()).digest(),
+    b"panel-session",
+    hashlib.sha256,
+).hexdigest()
+
+_LOGIN_TPL = """<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录 · 图恒宇计划</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; padding: 24px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: #e2e8f0; background-color: #0b1020;
+    background-image:
+      radial-gradient(900px 500px at 12% -10%, rgba(34,211,238,.15), transparent 60%),
+      radial-gradient(800px 520px at 88% -18%, rgba(129,140,248,.17), transparent 60%);
+  }
+  .card {
+    width: 100%; max-width: 372px; padding: 34px 28px 26px;
+    background: rgba(18,25,44,.92);
+    border: 1px solid rgba(148,163,184,.16);
+    border-radius: 18px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.55);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+  .brand svg { display: block; flex: 0 0 auto; }
+  .name {
+    font-size: 1.16rem; font-weight: 700; letter-spacing: .02em;
+    background: linear-gradient(90deg, #22d3ee, #818cf8);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .sub { margin: 0 0 24px; font-size: .82rem; color: #94a3b8; letter-spacing: .03em; }
+  label { display: block; font-size: .78rem; color: #94a3b8; margin: 0 0 7px; letter-spacing: .04em; }
+  input {
+    width: 100%; padding: 12px 13px; margin-bottom: 18px;
+    font-size: .95rem; color: #e2e8f0; background: rgba(11,16,32,.85);
+    border: 1px solid rgba(148,163,184,.22); border-radius: 10px; outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  input:focus { border-color: #22d3ee; box-shadow: 0 0 0 3px rgba(34,211,238,.14); }
+  button {
+    width: 100%; padding: 12px; margin-top: 4px;
+    font-size: .95rem; font-weight: 600; letter-spacing: .14em; color: #06121f;
+    background: linear-gradient(90deg, #22d3ee, #818cf8);
+    border: 0; border-radius: 10px; cursor: pointer;
+    transition: filter .15s, transform .06s;
+  }
+  button:hover { filter: brightness(1.08); }
+  button:active { transform: translateY(1px); }
+  .err {
+    margin: 0 0 18px; padding: 9px 12px; font-size: .83rem;
+    color: #fca5a5; background: rgba(248,113,113,.10);
+    border: 1px solid rgba(248,113,113,.28); border-radius: 9px;
+  }
+  .foot { margin: 22px 0 0; font-size: .72rem; color: #64748b; text-align: center; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      __LOGO__
+      <div class="name">图恒宇计划</div>
+    </div>
+    <p class="sub">给 bot 完整的一生</p>
+    __ERR__
+    <form method="post" action="/login">
+      <label for="u">用户名</label>
+      <input id="u" name="username" autocomplete="username" autofocus required>
+      <label for="p">密码</label>
+      <input id="p" name="password" type="password" autocomplete="current-password" required>
+      <button type="submit">登录</button>
+    </form>
+    <p class="foot">图恒宇计划 · 部署面板</p>
+  </div>
+</body>
+</html>
+"""
+
+
+def _login_page(error: str = "") -> str:
+    err = f'<div class="err">{_html.escape(error)}</div>' if error else ""
+    return _LOGIN_TPL.replace("__LOGO__", LOGO_SVG).replace("__ERR__", err)
+
+
+def _has_session(request) -> bool:
+    return hmac.compare_digest(request.cookies.get(COOKIE_NAME, ""), _SESSION_TOKEN)
+
+
 @app.middleware("http")
-async def _basic_auth(request, call_next):
-    if not PANEL_PASS:
+async def _auth(request, call_next):
+    path = request.url.path
+
+    # --- 登录 / 登出：中间件直接处理，不进 NiceGUI ---
+    if path == "/login":
+        if request.method == "GET":
+            return _Resp(_login_page(), media_type="text/html")
+        body = (await request.body()).decode("utf-8", "replace")
+        form = urllib.parse.parse_qs(body)
+        user = form.get("username", [""])[0]
+        pwd = form.get("password", [""])[0]
+        # 两个都比较（用 & 而非 and），避免用户名对错影响比较耗时
+        ok = hmac.compare_digest(user, PANEL_USER) & hmac.compare_digest(pwd, PANEL_PASS)
+        if ok:
+            resp = _Resp(status_code=303, headers={"Location": "/"})
+            resp.set_cookie(
+                COOKIE_NAME, _SESSION_TOKEN,
+                max_age=7 * 24 * 3600, httponly=True, samesite="lax", path="/",
+            )
+            return resp
+        return _Resp(_login_page("用户名或密码不对"), media_type="text/html")
+
+    if path == "/logout":
+        resp = _Resp(status_code=303, headers={"Location": "/login"})
+        resp.delete_cookie(COOKIE_NAME, path="/")
+        return resp
+
+    # --- NiceGUI 静态资源：放行（只有 JS / CSS / 字体，不含数据）---
+    if path.startswith("/_nicegui/"):
         return await call_next(request)
-    expected = "Basic " + base64.b64encode(
-        f"{PANEL_USER}:{PANEL_PASS}".encode()
-    ).decode()
-    if request.headers.get("authorization") != expected:
-        return _Resp(
-            status_code=401,
-            headers={"WWW-Authenticate": 'Basic realm="tuhengyu"'},
-        )
-    return await call_next(request)
+
+    # --- NiceGUI 实时通道：**必须带 Cookie** ---
+    # 实测（2026-10-01）：真实挂载点是 /_nicegui_ws/，它**不**匹配上面的
+    # /_nicegui/ 前缀（"_nicegui_ws" 与 "_nicegui/" 是两个不同前缀），
+    # 所以必须单独判断。这条拦不住 = 页面数据可被未认证者从实时通道拉走。
+    if path.startswith("/_nicegui_ws/"):
+        if _has_session(request):
+            return await call_next(request)
+        return _Resp(status_code=303, headers={"Location": "/login"})
+
+    if path.startswith("/favicon.ico"):
+        return await call_next(request)
+
+    # --- 其余一切都要会话 Cookie ---
+    if _has_session(request):
+        return await call_next(request)
+
+    return _Resp(status_code=303, headers={"Location": "/login"})
 
 
 ui.run(host="0.0.0.0", port=8080, title="图恒宇计划", reload=False)
