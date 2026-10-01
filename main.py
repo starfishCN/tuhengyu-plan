@@ -320,10 +320,11 @@ def source_section():
         await _run("应用 Docker 镜像加速", apply_mirror_cmds(url))
 
     ui.button(
-        "应用选中的镜像加速（写 daemon.json 并重启 Docker）",
+        "应用镜像加速",
         icon="settings_suggest",
         on_click=apply_mirror,
     ).classes("tg-step")
+    ui.label("会写入 daemon.json 并重启 Docker").classes("text-xs opacity-55")
 
 
 # ---------------------------------------------------------------- 凭据
