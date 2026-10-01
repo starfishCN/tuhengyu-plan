@@ -52,7 +52,7 @@ docker logs astrbot 2>&1 | grep 'Initial password' | tail -n 1
 输出形如：
 
 ```
-➜  Initial password: Nrvn5CCJ9P9rAR3ghsgDbg1b
+➜  Initial password: 1a2b3c4d5e6f7g8h
 ```
 
 > ⚠️ **这行只在第一次启动时打印。** 如果命令没输出，说明容器不是全新的了。

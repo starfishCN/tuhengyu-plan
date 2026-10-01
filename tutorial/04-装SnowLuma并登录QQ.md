@@ -66,7 +66,7 @@
 docker inspect snowluma --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep '^VNC_PASSWD='
 ```
 
-输出形如 `VNC_PASSWD=tuhengyu2026`，等号后面就是密码。
+输出形如 `VNC_PASSWD=<你的密码>`，等号后面就是密码。
 
 **AstrBot 控制台密码**：
 
