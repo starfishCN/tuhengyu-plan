@@ -1,12 +1,18 @@
-"""图恒宇计划 · 部署面板（NiceGUI）—— 骨架 v0.2
+"""图恒宇计划 · 部署面板（NiceGUI）
 
-本版新增「网络源」区：镜像加速 / GitHub 加速的候选列表 + 并发测速 + 自动选优。
-跑在目标 Linux VPS 上，需 root（或 docker 组）权限。
+v0.3（2026-10-01）：界面重做 —— 深色主题、响应式（手机可用）、凭据表格化。
 
-注意：NiceGUI / httpx 的 API 以你安装的版本为准。
+外观设计的三条约束：
+  1. 目标机器**无国际出口**，所以**不能引用任何外部资源**（CDN / 外链字体 / 外链图）。
+     全部样式内联；图标用内联 SVG 或 NiceGUI 自带的本地字体图标。
+  2. 面板**跑在 http 上**（非安全上下文），`navigator.clipboard` 不可用，
+     复制必须走 `execCommand` 回退。
+  3. 手机屏幕窄，按钮要能换行、表格要能横向滚动。
 """
 import asyncio
 import base64
+import html as _html
+import json
 import os
 
 from nicegui import app, ui
@@ -22,6 +28,150 @@ from core import credentials
 
 STATE = {"busy": False, "mirror": None, "proxy": None}
 LOG = None
+
+# ---------------------------------------------------------------- 外观
+
+# 自绘 SVG（无版权问题，无外部依赖）：一颗行星 + 两条轨道
+LOGO_SVG = """
+<svg viewBox="0 0 48 48" width="38" height="38" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="tg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#818cf8"/>
+    </linearGradient>
+  </defs>
+  <circle cx="24" cy="24" r="8.5" stroke="url(#tg)" stroke-width="2.4"/>
+  <ellipse cx="24" cy="24" rx="19" ry="7.5" stroke="url(#tg)" stroke-width="1.5"
+           opacity="0.8" transform="rotate(-18 24 24)"/>
+  <ellipse cx="24" cy="24" rx="19" ry="7.5" stroke="url(#tg)" stroke-width="1.2"
+           opacity="0.4" transform="rotate(52 24 24)"/>
+  <circle cx="24" cy="24" r="3" fill="url(#tg)"/>
+</svg>
+"""
+
+CSS = """
+/* ---------- 品牌栏 ---------- */
+.tg-brand {
+  background:
+    radial-gradient(1200px 400px at 10% -40%, rgba(34,211,238,.16), transparent 60%),
+    radial-gradient(900px 400px at 90% -60%, rgba(129,140,248,.18), transparent 60%);
+  border-bottom: 1px solid rgba(148,163,184,.18);
+}
+.tg-title {
+  font-size: 1.4rem; font-weight: 700; letter-spacing: .01em; line-height: 1.2;
+  background: linear-gradient(90deg, #22d3ee, #818cf8);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+}
+.tg-sub { font-size: .72rem; opacity: .55; letter-spacing: .08em; }
+
+/* ---------- 卡片 ---------- */
+.tg-card {
+  border-radius: 16px !important;
+  border: 1px solid rgba(148,163,184,.20) !important;
+  box-shadow: 0 8px 28px rgba(0,0,0,.10) !important;
+}
+
+/* ---------- 步骤按钮 ---------- */
+.tg-step {
+  border-radius: 12px !important;
+  text-transform: none !important;
+  font-weight: 600 !important;
+  letter-spacing: .01em !important;
+}
+
+/* ---------- 凭据表 ---------- */
+.tg-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tg-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .93rem; }
+.tg-table th {
+  text-align: left; padding: 9px 12px;
+  font-size: .72rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+  opacity: .55; white-space: nowrap;
+  border-bottom: 1px solid rgba(148,163,184,.28);
+}
+.tg-table td {
+  padding: 13px 12px; vertical-align: middle;
+  border-bottom: 1px solid rgba(148,163,184,.13);
+}
+.tg-table tbody tr:last-child td { border-bottom: none; }
+.tg-table tbody tr:hover { background: rgba(148,163,184,.07); }
+.tg-pw {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 600; letter-spacing: .01em;
+  word-break: break-all;
+}
+.tg-port { opacity: .6; font-family: ui-monospace, monospace; white-space: nowrap; }
+.tg-copy {
+  border: 1px solid rgba(148,163,184,.35);
+  background: transparent; color: inherit;
+  border-radius: 8px; padding: 4px 11px; font-size: .8rem; cursor: pointer;
+  transition: all .15s; white-space: nowrap;
+}
+.tg-copy:hover { border-color: #22d3ee; color: #22d3ee; }
+.tg-copy:active { transform: scale(.95); }
+.tg-none { opacity: .45; }
+.tg-note {
+  margin-top: 10px; padding: 10px 12px; border-radius: 10px; font-size: .82rem;
+  line-height: 1.65;
+  background: rgba(251,191,36,.10);
+  border: 1px solid rgba(251,191,36,.28);
+}
+
+/* ---------- 日志 ---------- */
+.tg-log {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  font-size: .76rem !important; line-height: 1.5 !important;
+  border-radius: 12px !important;
+  background: rgba(2,6,23,.55) !important;
+}
+
+/* ---------- 手机 ---------- */
+@media (max-width: 640px) {
+  .tg-title { font-size: 1.12rem; }
+  .tg-brand { padding: 12px 14px !important; }
+  .tg-step { width: 100%; }
+  .tg-hide-sm { display: none !important; }
+  .tg-table { font-size: .84rem; }
+  .tg-table th { padding: 7px 8px; font-size: .66rem; }
+  .tg-table td { padding: 10px 8px; }
+  .tg-card { border-radius: 13px !important; }
+}
+"""
+
+# 复制函数：http 下 navigator.clipboard 不可用，必须回退到 execCommand
+COPY_JS = """
+<script>
+function tgCopy(btn, text) {
+  const ok = () => {
+    const old = btn.textContent;
+    btn.textContent = '已复制';
+    setTimeout(() => { btn.textContent = old; }, 1200);
+  };
+  const legacy = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); ok(); }
+    catch (e) { btn.textContent = '复制失败'; }
+    document.body.removeChild(ta);
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(ok).catch(legacy);
+  } else {
+    legacy();
+  }
+}
+</script>
+"""
+
+
+def apply_style() -> None:
+    ui.add_head_html(f"<style>{CSS}</style>")
+    ui.add_head_html(COPY_JS)
 
 
 def _fmt(r: dict) -> str:
@@ -70,8 +220,9 @@ def _dynamic_handler(title, cmds_fn):
     return _h
 
 
+# ---------------------------------------------------------------- 网络源
+
 def source_section():
-    ui.markdown("#### 网络源（镜像加速 / GitHub 加速）")
     ui.markdown(
         "国内直连 docker / github 常常不通。点测速，面板会并发测所有候选，"
         "自动预选延迟最低的可用线路；**也可以手动点选**。\n\n"
@@ -81,7 +232,6 @@ def source_section():
     mirror_status = ui.label("镜像加速：未选（先测速，再点选）")
     proxy_status = ui.label("GitHub 加速：未选")
 
-    # 可手动点选的单选组；测速后自动填选项并预选最优
     mirror_select = ui.radio({}, value=None)
     proxy_select = ui.radio({}, value=None)
 
@@ -117,9 +267,9 @@ def source_section():
             STATE["busy"] = False
             LOG.push("===== 源测速 结束 =====")
 
-    ui.button("一键测速并自动选优", on_click=speedtest)
+    ui.button("一键测速并自动选优", icon="speed", on_click=speedtest).classes("tg-step")
 
-    ui.label("↓ 点一下选中要用的镜像（测速后可改）")
+    ui.label("↓ 点一下选中要用的镜像（测速后可改）").classes("text-xs opacity-60")
     mirror_select
     proxy_select
 
@@ -132,30 +282,83 @@ def source_section():
             return
         await _run("应用 Docker 镜像加速", apply_mirror_cmds(url))
 
-    ui.button("应用选中的镜像加速（写 daemon.json 并重启 Docker）", on_click=apply_mirror)
+    ui.button(
+        "应用选中的镜像加速（写 daemon.json 并重启 Docker）",
+        icon="settings_suggest",
+        on_click=apply_mirror,
+    ).classes("tg-step")
+
+
+# ---------------------------------------------------------------- 凭据
+
+def _cred_table_html(rows: list) -> str:
+    out = [
+        '<div class="tg-wrap"><table class="tg-table"><thead><tr>',
+        "<th>服务</th><th>端口</th><th>初始密码</th><th></th>",
+        "</tr></thead><tbody>",
+    ]
+    for r in rows:
+        name = _html.escape(r["name"])
+        if r["ok"]:
+            pw = _html.escape(r["value"])
+            quoted = json.dumps(r["value"])  # 安全地嵌入 onclick
+            out.append(
+                f"<tr><td>{name}</td>"
+                f'<td class="tg-port">{r["port"]}</td>'
+                f'<td class="tg-pw">{pw}</td>'
+                f'<td><button class="tg-copy" '
+                f"onclick='tgCopy(this, {quoted})'>复制</button></td></tr>"
+            )
+        else:
+            out.append(
+                f"<tr><td>{name}</td>"
+                f'<td class="tg-port">{r["port"]}</td>'
+                f'<td class="tg-none">没读到</td><td></td></tr>'
+            )
+    out.append("</tbody></table></div>")
+    out.append(
+        '<div class="tg-note">'
+        "⚠️ 读到的都是<b>初始密码</b>。若你已改过密码，这里显示的是旧值，"
+        "<b>以你改后的为准</b>。"
+        "<br>其中 SnowLuma 若一直没改密，<b>重启会重新生成一个新密码</b>。"
+        "</div>"
+    )
+    return "".join(out)
+
+
+def _port_table_html() -> str:
+    out = [
+        '<div class="tg-wrap"><table class="tg-table"><thead><tr>',
+        "<th>服务</th><th>内部端口</th><th>说明</th>",
+        "</tr></thead><tbody>",
+    ]
+    for name, port, hint in credentials.PORTS:
+        out.append(
+            f"<tr><td>{_html.escape(name)}</td>"
+            f'<td class="tg-port">{port}</td>'
+            f"<td>{_html.escape(hint) or '—'}</td></tr>"
+        )
+    out.append("</tbody></table></div>")
+    out.append(
+        '<div class="tg-note">'
+        "从外网访问时，把<b>内部端口</b>换成你在云服务商控制台映射的<b>外部端口</b>。"
+        "</div>"
+    )
+    return "".join(out)
 
 
 def credential_section():
     ui.markdown(
         "装完之后，各家控制台的密码分散在**容器日志**和**环境变量**里，"
-        "新手很难找到。点下面的按钮，面板替你读出来。\n\n"
-        "⚠️ 读到的都是**初始密码**。如果你已经改过密码，这里显示的是旧值，"
-        "**以你改后的为准**。"
+        "新手很难找到。点下面的按钮，面板替你读出来。"
     )
-
-    ui.markdown("**各服务的端口**（从外网访问时，端口换成你在云控制台映射的那个）")
-    for name, port, hint in credentials.PORTS:
-        line = f"- {name}：`{port}`"
-        if hint:
-            line += f"　—　{hint}"
-        ui.markdown(line)
 
     box = ui.column().classes("w-full")
 
     async def refresh():
         box.clear()
         with box:
-            ui.label("读取中 ...")
+            ui.spinner(size="lg")
         try:
             rows = await credentials.gather()
         except Exception as exc:
@@ -165,52 +368,85 @@ def credential_section():
             return
         box.clear()
         with box:
-            for r in rows:
-                with ui.row().classes("items-center gap-2 no-wrap"):
-                    ui.label(f"{r['name']}（{r['port']}）").classes("w-52")
-                    if r["ok"]:
-                        ui.label(r["value"]).classes("font-mono text-base")
-                        ui.button(
-                            icon="content_copy",
-                            on_click=lambda v=r["value"]: ui.run_javascript(
-                                f"navigator.clipboard.writeText({v!r})"
-                            ),
-                        ).props("flat dense")
-                    else:
-                        ui.label("—— 没读到").classes("text-gray-500")
-                ui.label(r["note"]).classes("text-xs text-gray-500")
+            ui.html(_cred_table_html(rows), sanitize=False)
 
-    ui.button("读取 / 刷新", on_click=refresh)
+    ui.button("读取 / 刷新", icon="key", on_click=refresh).classes("tg-step")
 
+    ui.label("各服务的端口").classes("text-sm font-semibold mt-4 opacity-80")
+    ui.html(_port_table_html(), sanitize=False)
+
+
+# ---------------------------------------------------------------- 首页
 
 @ui.page("/")
 def index():
     global LOG
-    ui.markdown("# 图恒宇计划 · 部署面板")
-    ui.markdown("按顺序点。**先体检**，再配源，然后装东西。")
+    apply_style()
 
-    with ui.row():
-        ui.button("① 环境体检", on_click=_handler("环境体检", CHECK_CMDS))
-        ui.button("② 安装 Docker", on_click=_handler("安装 Docker", DOCKER_CMDS))
-        ui.button(
-            "③ 安装 SnowLuma",
-            on_click=_dynamic_handler(
-                "安装 SnowLuma",
-                lambda: snowluma_cmds(
-                    STATE["proxy"]["prefix"] if STATE["proxy"] else ""
-                ),
-            ),
-        )
-        ui.button("④ 安装 AstrBot", on_click=_handler("安装 AstrBot", ASTRBOT_CMDS))
-        ui.button("⑤ 连线（待实现）", on_click=lambda: ui.notify("待实现", type="info"))
+    # 品牌栏
+    with ui.row().classes("tg-brand w-full items-center gap-3 px-5 py-4 no-wrap"):
+        ui.html(LOGO_SVG, sanitize=False)
+        with ui.column().classes("gap-0"):
+            ui.label("图恒宇计划").classes("tg-title")
+            ui.label("DEPLOY PANEL").classes("tg-sub")
+        ui.space()
+        ui.label("给 bot 完整的一生").classes("tg-sub tg-hide-sm")
+        ui.button(icon="contrast", on_click=ui.dark_mode().toggle).props(
+            "flat round dense"
+        ).tooltip("切换深浅色")
 
-    with ui.expansion("网络源（测速 / 自动选优）", value=True):
-        source_section()
+    # 主区
+    with ui.column().classes("w-full max-w-5xl mx-auto gap-4 p-4"):
 
-    with ui.expansion("找不到密码？点这里读初始凭据", value=False):
-        credential_section()
+        with ui.card().classes("tg-card w-full"):
+            ui.label("部署步骤").classes("text-sm font-semibold opacity-70")
+            with ui.row().classes("gap-2 w-full"):
+                ui.button(
+                    "① 环境体检",
+                    icon="health_and_safety",
+                    on_click=_handler("环境体检", CHECK_CMDS),
+                ).classes("tg-step")
+                ui.button(
+                    "② 安装 Docker",
+                    icon="inventory_2",
+                    on_click=_handler("安装 Docker", DOCKER_CMDS),
+                ).classes("tg-step")
+                ui.button(
+                    "③ 安装 SnowLuma",
+                    icon="chat",
+                    on_click=_dynamic_handler(
+                        "安装 SnowLuma",
+                        lambda: snowluma_cmds(
+                            STATE["proxy"]["prefix"] if STATE["proxy"] else ""
+                        ),
+                    ),
+                ).classes("tg-step")
+                ui.button(
+                    "④ 安装 AstrBot",
+                    icon="smart_toy",
+                    on_click=_handler("安装 AstrBot", ASTRBOT_CMDS),
+                ).classes("tg-step")
+                ui.button(
+                    "⑤ 连线（待实现）",
+                    icon="link_off",
+                    on_click=lambda: ui.notify("待实现", type="info"),
+                ).classes("tg-step")
 
-    LOG = ui.log(max_lines=4000).classes("w-full h-96")
+        with ui.expansion("网络源（测速 / 自动选优）", icon="tune", value=True).classes(
+            "tg-card w-full"
+        ):
+            source_section()
+
+        with ui.expansion("找不到密码？点这里读初始凭据", icon="key", value=False).classes(
+            "tg-card w-full"
+        ):
+            credential_section()
+
+        with ui.card().classes("tg-card w-full"):
+            with ui.row().classes("items-center gap-2"):
+                ui.icon("terminal").classes("opacity-60")
+                ui.label("运行日志").classes("text-sm font-semibold opacity-70")
+            LOG = ui.log(max_lines=4000).classes("tg-log w-full h-80")
 
 
 # ---------- 认证：面板能执行命令，公网暴露前必须挡一道 ----------
@@ -220,7 +456,6 @@ PANEL_PASS = os.environ.get("PANEL_PASS", "")
 
 @app.middleware("http")
 async def _basic_auth(request, call_next):
-    # 没设密码就不拦（本地/内网调试用）；设了就必须带 Basic 认证
     if not PANEL_PASS:
         return await call_next(request)
     expected = "Basic " + base64.b64encode(
