@@ -38,24 +38,27 @@ SnowLuma 是「手和嘴」，现在装「大脑」。
 
 ## 三、找到登录密码
 
-AstrBot 的初始密码也是**随机生成**的。
+**面板能直接读出来。**
+
+回到面板，展开 **「找不到密码？点这里读初始凭据」**，
+点 **「读取 / 刷新」**，AstrBot 那一行就是。
+
+### 手动查
 
 ```bash
-docker logs astrbot 2>&1 | grep -iE "password|密码" | head -20
+docker logs astrbot 2>&1 | grep 'Initial password' | tail -n 1
 ```
 
-日志里会打印出用户名和密码，形如：
+输出形如：
 
 ```
-用户名: astrbot
-密码: Nrvn5CCJ9P9rAR3ghsgDbg1b
+➜  Initial password: Nrvn5CCJ9P9rAR3ghsgDbg1b
 ```
+
+> ⚠️ **这行只在第一次启动时打印。** 如果命令没输出，说明容器不是全新的了。
+> 这时候用面板读（它在日志里翻），或者把数据目录清掉重装。
 
 **抄下来。**
-
-> 如果没找到，把日志开头都看一遍：`docker logs astrbot | head -60`
->
-> 不同版本提示的位置不一样，但一定在启动日志里。
 
 ---
 

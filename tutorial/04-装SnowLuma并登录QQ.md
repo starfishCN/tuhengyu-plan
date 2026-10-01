@@ -42,34 +42,65 @@
 
 ## 三、找到密码
 
-SnowLuma 的两个密码是**随机生成**的，只在**第一次启动**时打印一次。
+**这一步面板替你做。**
 
-在面板里没有取密码的按钮 —— 你需要连上服务器执行命令
-（怎么连见 01 篇）。
+回到面板，往下找到折叠区 **「找不到密码？点这里读初始凭据」**，点开，
+再点 **「读取 / 刷新」**。稍等一两秒，会列出：
 
-### 远程桌面密码（扫码要用）
+| 服务 | 显示什么 |
+|---|---|
+| 远程桌面 noVNC | 你自己的密码 |
+| AstrBot 控制台 | 初始密码 |
+| SnowLuma 控制台 | 初始密码 |
+
+**每行右边有个复制按钮**，点一下就能复制。
+
+> ⚠️ **读到的都是「初始密码」。** 如果你之后改过密码，这里显示的是旧值。
+> 页面上也写了这句提示 —— 别把它当「当前密码」。
+
+### 想手动查也行
+
+**远程桌面密码**（存在容器的环境变量里，最稳定）：
 
 ```bash
-docker logs snowluma 2>&1 | grep -E "远程桌面密码:|remote desktop password:" | tail -n 1
+docker inspect snowluma --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep '^VNC_PASSWD='
 ```
 
-输出类似：
+输出形如 `VNC_PASSWD=tuhengyu2026`，等号后面就是密码。
 
-```
-远程桌面密码: tuhengyu2026
-```
-
-**把这个密码记下来。** 等下打开远程桌面时要用。
-
-### SnowLuma 控制台密码（备用）
+**AstrBot 控制台密码**：
 
 ```bash
-docker logs snowluma 2>&1 | grep -E "临时密码|initial credentials" | tail -n 1
+docker logs astrbot 2>&1 | grep 'Initial password' | tail -n 1
 ```
 
-> ⚠️ **如果命令没有任何输出**，说明容器的数据目录不是全新的，
-> 密码已经在之前打印过了，不会再打。
-> 这时候看日志里更早的内容：`docker logs snowluma | head -50`
+输出形如 `➜  Initial password: Nrvn5CC...`。
+
+**SnowLuma 控制台密码**：
+
+```bash
+docker logs snowluma 2>&1 | grep 'initial credentials' | tail -n 1
+```
+
+输出形如 `initial credentials: user=admin password=aa660de...`。
+
+### ⚠️ 两个必须知道的事
+
+**一、日志里的密码只在「第一次启动」时打印。**
+
+如果命令没输出，说明容器不是全新的了。
+
+**二、SnowLuma 的初始密码会变。**
+
+日志里可能出现这一句：
+
+```
+WARN [WebUI.Auth] previous bootstrap password was never rotated; regenerated a new one
+```
+
+意思是：**上次生成的初始密码你没改，这次它换了一个新的。**
+
+**所以：登录之后第一时间改密码。** 改完就记在自己那儿，别依赖日志。
 
 ---
 
