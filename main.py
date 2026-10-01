@@ -80,6 +80,34 @@ CSS = """
   letter-spacing: .01em !important;
 }
 
+/* 图标与中文混排的对齐：
+   Material Icons 的字形基线是按英文调的，与中文并排时容易显得上下不齐。
+   统一 flex 居中 + 图标略放大 + 明确间距。 */
+.tg-step .q-btn__content {
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1.35 !important;
+  gap: 6px !important;
+}
+.tg-step .q-icon {
+  font-size: 1.2em !important;
+  vertical-align: middle !important;
+  line-height: 1 !important;
+}
+.tg-step .q-btn__content > span {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1.35;
+}
+
+/* 品牌栏 logo：行内 SVG 默认按基线对齐，会与标题文字错位 */
+.tg-brand svg {
+  display: block !important;
+  flex: 0 0 auto;
+}
+/* 卡片标题行里的图标同样处理 */
+.tg-headicon { line-height: 1 !important; }
+
 /* ---------- 凭据表 ---------- */
 .tg-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .tg-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .93rem; }
