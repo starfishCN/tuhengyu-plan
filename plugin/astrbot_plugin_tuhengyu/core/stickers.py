@@ -69,6 +69,10 @@ class StickerLibrary:
         parts = [f"{lab}×{len(self._index[lab])}" for lab in self.labels()]
         return f"共 {self.count()} 张 · " + " / ".join(parts)
 
+    def groups(self) -> dict[str, list[Path]]:
+        """按标签分组返回副本（供页面展示，外部改动不影响索引）。"""
+        return {lab: list(paths) for lab, paths in self._index.items()}
+
     # ---------- 挑一张 ----------
     def pick(self, context_text: str = "") -> Path | None:
         """按传入文本挑一张。文本为空则退到 default / 全部随机。"""

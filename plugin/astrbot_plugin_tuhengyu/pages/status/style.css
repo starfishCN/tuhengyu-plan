@@ -467,3 +467,87 @@ select.set-input {
   gap: 10px;
   margin-top: 14px;
 }
+
+/* ---------- 表情包库 ---------- */
+
+.sticker-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.sticker-bar .card-hint {
+  margin: 0;
+}
+
+.gallery-group {
+  margin-bottom: 16px;
+}
+
+.gallery-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 10px;
+}
+
+.gallery-count {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+}
+
+.sticker-card {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.sticker-card img {
+  display: block;
+  width: 100%;
+  height: 96px;
+  object-fit: contain;
+  background: var(--card);
+}
+
+.sticker-ph {
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  padding: 4px;
+}
+
+.sticker-card figcaption {
+  padding: 5px 6px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gallery .empty {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 14px 0;
+}

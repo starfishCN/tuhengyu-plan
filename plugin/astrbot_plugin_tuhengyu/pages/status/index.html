@@ -20,6 +20,7 @@
         <button class="tab active" data-tab="status" type="button">状态</button>
         <button class="tab" data-tab="actions" type="button">操作</button>
         <button class="tab" data-tab="settings" type="button">设置</button>
+        <button class="tab" data-tab="stickers" type="button">表情包</button>
       </nav>
 
       <p id="notice" class="notice" hidden></p>
@@ -151,6 +152,24 @@
             <button id="reload-settings" class="btn btn-ghost" type="button">放弃改动</button>
           </div>
           <div id="settings-result" class="action-result" hidden></div>
+        </section>
+      </section>
+
+      <!-- ========== 页签 4：表情包 ========== -->
+      <section class="tab-pane" id="pane-stickers">
+        <section class="panel">
+          <h2>表情包库</h2>
+          <p class="set-tip">
+            按情绪（目录名）分类。子目录名就是分类，例：<code>stickers/开心/a.png</code>；
+            直接放在 <code>stickers/</code> 下的散图归「default」。对话里收到的图自动进 <code>collected</code>。
+          </p>
+          <div class="sticker-bar">
+            <span id="sticker-summary" class="card-hint">读取中 …</span>
+            <button id="sticker-refresh" class="btn btn-ghost" type="button">刷新</button>
+          </div>
+          <div id="sticker-gallery" class="gallery">
+            <div class="empty">读取中 …</div>
+          </div>
         </section>
       </section>
     </main>

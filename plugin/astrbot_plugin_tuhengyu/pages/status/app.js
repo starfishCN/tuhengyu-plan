@@ -215,6 +215,7 @@ function switchTab(name) {
   for (const p of document.querySelectorAll(".tab-pane")) {
     p.classList.toggle("active", p.id === "pane-" + name);
   }
+  if (name === "stickers") loadStickers();
 }
 
 function setupTabs() {
@@ -224,6 +225,104 @@ function setupTabs() {
     const btn = e.target.closest(".tab");
     if (btn) switchTab(btn.dataset.tab);
   });
+}
+
+// ==================== 表情包库 ====================
+
+const STICKER_MIME = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".bmp": "image/bmp",
+};
+
+function mimeOf(name) {
+  const s = String(name || "");
+  const i = s.lastIndexOf(".");
+  const ext = i >= 0 ? s.slice(i).toLowerCase() : "";
+  return STICKER_MIME[ext] || "image/png";
+}
+
+function fmtSize(n) {
+  const v = Number(n) || 0;
+  if (v >= 1024 * 1024) return (v / 1024 / 1024).toFixed(1) + " MB";
+  if (v >= 1024) return (v / 1024).toFixed(0) + " KB";
+  return v + " B";
+}
+
+function stickerCard(img) {
+  const card = document.createElement("figure");
+  card.className = "sticker-card";
+  if (img.b64) {
+    const el = document.createElement("img");
+    el.loading = "lazy";
+    el.alt = img.name;
+    el.src = "data:" + mimeOf(img.name) + ";base64," + img.b64;
+    card.appendChild(el);
+  } else {
+    const ph = document.createElement("div");
+    ph.className = "sticker-ph";
+    ph.textContent = img.skipped ? "过大，未预览" : img.error || "无法预览";
+    card.appendChild(ph);
+  }
+  const cap = document.createElement("figcaption");
+  cap.textContent = img.name + " · " + fmtSize(img.size);
+  card.appendChild(cap);
+  return card;
+}
+
+function renderStickers(data) {
+  const box = $("sticker-gallery");
+  if (!box) return;
+  const groups = (data && data.groups) || [];
+  const sum = $("sticker-summary");
+  if (sum) {
+    let s = (data && data.desc) || "无";
+    if (data && data.truncated) s += " · 部分图过大，未显示预览";
+    sum.textContent = s;
+  }
+  box.innerHTML = "";
+  if (!groups.length) {
+    box.innerHTML =
+      '<div class="empty">库里还没有图。把图放进插件数据目录的 <code>stickers/&lt;分类&gt;/</code> 即可。</div>';
+    return;
+  }
+  for (const g of groups) {
+    const sec = document.createElement("section");
+    sec.className = "gallery-group";
+    const head = document.createElement("div");
+    head.className = "gallery-head";
+    head.textContent = g.label;
+    const cnt = document.createElement("span");
+    cnt.className = "gallery-count";
+    cnt.textContent = g.count + " 张";
+    head.appendChild(cnt);
+    sec.appendChild(head);
+    const grid = document.createElement("div");
+    grid.className = "gallery-grid";
+    for (const img of g.images || []) {
+      grid.appendChild(stickerCard(img));
+    }
+    sec.appendChild(grid);
+    box.appendChild(sec);
+  }
+}
+
+let stickersLoaded = false;
+
+async function loadStickers(force) {
+  if (stickersLoaded && !force) return;
+  const box = $("sticker-gallery");
+  if (box) box.innerHTML = '<div class="empty">读取中 …</div>';
+  try {
+    const data = await bridge.apiGet("stickers");
+    stickersLoaded = true;
+    renderStickers(data);
+  } catch (e) {
+    if (box) box.innerHTML = `<div class="empty">读取表情包失败：${esc(e.message)}</div>`;
+  }
 }
 
 // ==================== 设置 ====================
@@ -465,6 +564,7 @@ function stickerReload() {
         node.classList.remove("err");
         node.textContent = `已重扫：${data.sticker_desc ?? DASH}`;
       }
+      stickersLoaded = false;
       showNotice("");
     } catch (e) {
       showNotice(`重扫失败：${e.message}`, true);
@@ -477,6 +577,7 @@ function bind() {
   $("reschedule")?.addEventListener("click", reschedule);
   $("test-moment")?.addEventListener("click", testMoment);
   $("sticker-reload")?.addEventListener("click", stickerReload);
+  $("sticker-refresh")?.addEventListener("click", () => loadStickers(true));
   $("save-settings")?.addEventListener("click", saveSettings);
   $("reload-settings")?.addEventListener("click", () => {
     setSettingsResult("");

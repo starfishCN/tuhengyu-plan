@@ -62,6 +62,12 @@ class TuhengyuPlugin(Star):
                 "插件页面：重扫表情包目录",
             )
             context.register_web_api(
+                f"/{PLUGIN_NAME}/stickers",
+                self.page_stickers,
+                ["GET"],
+                "插件页面：表情包库（按标签分组）",
+            )
+            context.register_web_api(
                 f"/{PLUGIN_NAME}/settings",
                 self.page_settings_get,
                 ["GET"],
@@ -298,6 +304,53 @@ class TuhengyuPlugin(Star):
         data = self._scheduler.status_dict()
         data["running"] = True
         return json_response(data)
+
+    async def page_stickers(self):
+        """GET /astrbot_plugin_tuhengyu/stickers —— 表情包库按标签分组（含 base64 预览）。"""
+        if self._scheduler is None:
+            return error_response("调度器未运行（插件可能被禁用）", status_code=409)
+        lib = self._scheduler.stickers
+        try:
+            groups = lib.groups()
+        except Exception as e:
+            return error_response(f"读取表情包失败：{e}", status_code=500)
+
+        max_item = 800 * 1024  # 单张超过则不内联预览
+        max_total = 6 * 1024 * 1024  # 内联总量上限
+        total = 0
+        truncated = False
+        out = []
+        for label in sorted(groups):
+            paths = sorted(groups[label], key=lambda p: p.name)
+            images = []
+            for p in paths:
+                try:
+                    size = p.stat().st_size
+                except OSError:
+                    continue
+                item = {"name": p.name, "size": size}
+                if size <= max_item and total + size <= max_total:
+                    b64 = read_base64(p)
+                    if b64:
+                        item["b64"] = b64
+                        total += size
+                    else:
+                        item["error"] = "读取失败"
+                else:
+                    item["skipped"] = True
+                    truncated = True
+                images.append(item)
+            out.append({"label": label, "count": len(paths), "images": images})
+
+        return json_response(
+            {
+                "groups": out,
+                "desc": lib.describe(),
+                "total_bytes": total,
+                "truncated": truncated,
+                "max_item": max_item,
+            }
+        )
 
     # ---------- 插件页面：设置读写 ----------
     def _load_schema(self) -> dict:
