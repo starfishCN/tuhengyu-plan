@@ -1,47 +1,142 @@
 {
   "enabled": {
-    "description": "是否启用插件（关掉则不启动调度器）",
+    "description": "是否启用插件（关掉则不启动调度器，也不参与对话）",
     "type": "bool",
     "default": true
   },
-  "active_hours": {
-    "description": "活跃时段，24 小时制，形如 09:00-23:00；跨午夜或全天可写 00:00-24:00，多段用英文逗号分隔",
-    "type": "string",
-    "default": "09:00-23:00"
-  },
-  "check_interval_minutes": {
-    "description": "调度器多久检查一次「现在该不该行动」（分钟）",
-    "type": "int",
-    "default": 30
-  },
-  "act_probability": {
-    "description": "活跃时段内，每次检查触发行动的概率（0-1）",
-    "type": "float",
-    "default": 0.15
-  },
-  "moment_enabled": {
-    "description": "是否允许主动发 QQ 空间动态",
-    "type": "bool",
-    "default": true
-  },
-  "moment_min_interval_hours": {
-    "description": "两次发空间之间的最小间隔（小时）",
-    "type": "int",
-    "default": 6
-  },
-  "llm_provider_id": {
-    "description": "用来生成说说内容的模型 ID（填 AstrBot 模型提供商里的 ID，如 openai/LongCat-2.5-Preview）。留空则用 AstrBot 当前默认模型",
-    "type": "string",
-    "default": ""
-  },
+
   "persona_prompt": {
-    "description": "人设提示词：告诉它「你是谁」。留空则用内置的通用口吻。想让它像某个角色，就在这里写人设",
+    "description": "人设：告诉它「你是谁」。私聊和群聊共用这一份。留空则用内置的通用口吻",
     "type": "text",
     "default": ""
   },
-  "moment_prompt": {
-    "description": "发说说时给模型的指令。留空则用内置默认（20-60 字，口语，此刻所见所想）",
-    "type": "text",
-    "default": ""
+
+  "chat_private": {
+    "type": "object",
+    "description": "[私聊] 一对一会话",
+    "hint": "私聊时的表现。私聊默认「该回」，语气可以近一些、话可以长一些。",
+    "items": {
+      "enabled": {
+        "type": "bool",
+        "description": "启用私聊增强",
+        "hint": "开启后，私聊消息会按下面的配置调整 system prompt。关闭则完全走 AstrBot 原生流程。",
+        "default": true
+      },
+      "prompt": {
+        "type": "text",
+        "description": "私聊场景说明",
+        "hint": "整份替换 system prompt 中的场景部分（不是追加在人设后面，而是替换掉原本的场景描述）。写「现在是在私聊，一对一」这类。",
+        "default": "现在是在私聊。对面是专门来找你说话的人。可以放松一点，语气近一些，话可以说得长一些。"
+      },
+      "model": {
+        "type": "string",
+        "description": "私聊使用的模型",
+        "hint": "留空则用 AstrBot 当前默认模型。",
+        "_special": "select_provider",
+        "default": ""
+      }
+    }
+  },
+
+  "chat_group": {
+    "type": "object",
+    "description": "[群聊] 多人群里",
+    "hint": "群聊时的表现。群聊默认「沉默」，被叫到才回，语气收、话要短。",
+    "items": {
+      "enabled": {
+        "type": "bool",
+        "description": "启用群聊增强",
+        "hint": "开启后，群聊消息会按下面的配置调整 system prompt。关闭则完全走 AstrBot 原生流程。",
+        "default": true
+      },
+      "prompt": {
+        "type": "text",
+        "description": "群聊场景说明",
+        "hint": "整份替换 system prompt 中的场景部分。写「现在是群里，很多人」这类。",
+        "default": "现在是在群里，人不少。说话收着点，别太长，一两句就够。别抢话。"
+      },
+      "model": {
+        "type": "string",
+        "description": "群聊使用的模型",
+        "hint": "留空则用 AstrBot 当前默认模型。群聊消息多，可以在这里换一个更便宜的模型。",
+        "_special": "select_provider",
+        "default": ""
+      }
+    }
+  },
+
+  "schedule": {
+    "type": "object",
+    "description": "[作息] 它什么时候醒着、在干什么",
+    "hint": "决定它「此刻在干嘛」。所有后台行为（发空间等）都依赖这个 —— 否则会出现凌晨三点发自拍这种事。",
+    "items": {
+      "auto_generate": {
+        "type": "bool",
+        "description": "按人设自动生成作息",
+        "hint": "开启：首次启动读人设，让模型推一份一天作息并存盘（只烧一次 token，之后读盘）。人设改了会重算。关闭：用手填的作息。",
+        "default": true
+      },
+      "manual_hours": {
+        "type": "string",
+        "description": "手动作息（关闭自动生成时生效）",
+        "hint": "24 小时制，形如 09:00-23:00；跨午夜或全天写 00:00-24:00；多段用英文逗号分隔。",
+        "default": "09:00-23:00"
+      },
+      "generate_model": {
+        "type": "string",
+        "description": "生成作息用的模型",
+        "hint": "只需要推理一次，用便宜的就够。留空则用 AstrBot 当前默认模型。",
+        "_special": "select_provider",
+        "default": ""
+      }
+    }
+  },
+
+  "scheduler": {
+    "type": "object",
+    "description": "[调度] 多久检查一次「现在该不该做点什么」",
+    "items": {
+      "check_interval_minutes": {
+        "type": "int",
+        "description": "检查间隔（分钟）",
+        "default": 30
+      },
+      "act_probability": {
+        "type": "float",
+        "description": "每次检查触发行动的概率（0-1）",
+        "default": 0.15
+      }
+    }
+  },
+
+  "moment": {
+    "type": "object",
+    "description": "[空间] 主动发 QQ 空间动态",
+    "hint": "它像人一样发说说。内容由模型按「此刻在干嘛」生成。",
+    "items": {
+      "enabled": {
+        "type": "bool",
+        "description": "启用发说说",
+        "default": true
+      },
+      "min_interval_hours": {
+        "type": "int",
+        "description": "两次发说说之间的最小间隔（小时）",
+        "default": 6
+      },
+      "prompt": {
+        "type": "text",
+        "description": "发说说时的指令",
+        "hint": "留空则用内置默认（20-60 字，口语，此刻所见所想）。",
+        "default": ""
+      },
+      "provider_id": {
+        "type": "string",
+        "description": "生成说说内容的模型",
+        "hint": "留空则用 AstrBot 当前默认模型。",
+        "_special": "select_provider",
+        "default": ""
+      }
+    }
   }
 }

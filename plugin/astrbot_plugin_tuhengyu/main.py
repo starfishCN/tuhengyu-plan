@@ -33,9 +33,22 @@ class TuhengyuPlugin(Star):
         if not self.config.get("enabled", True):
             self.logger.info("[图恒宇] 插件已禁用，不启动调度器。")
             return
-        self._scheduler = LifeScheduler(self.context, self.config)
+        self._scheduler = LifeScheduler(self.context, self.config, self._data_dir())
+        await self._scheduler.setup()  # 生成 / 读取作息（失败会兜底，不抛）
         self._task = asyncio.create_task(self._scheduler.run(), name="tuhengyu_scheduler")
         self.logger.info("[图恒宇] 生活调度器已启动。")
+
+    def _data_dir(self) -> str:
+        """插件数据目录：data/plugin_data/astrbot_plugin_tuhengyu。"""
+        import os
+
+        try:
+            from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
+
+            return os.path.join(get_astrbot_plugin_data_path(), "astrbot_plugin_tuhengyu")
+        except Exception as e:  # API 变动时不致命，退到插件目录旁
+            self.logger.warning(f"[图恒宇] 取数据目录失败，退回插件目录：{e}")
+            return os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
     async def terminate(self):
         """插件卸载时调用：停调度器。"""
@@ -51,16 +64,7 @@ class TuhengyuPlugin(Star):
         if self._scheduler is None:
             yield event.plain_result("[图恒宇] 调度器未运行（插件可能被禁用）。")
             return
-        cfg = self.config
-        yield event.plain_result(
-            "[图恒宇] 调度器运行中。\n"
-            f"活跃时段：{cfg.get('active_hours', '09:00-23:00')}\n"
-            f"检查间隔：{cfg.get('check_interval_minutes', 30)} 分钟\n"
-            f"触发概率：{cfg.get('act_probability', 0.15)}\n"
-            f"发空间：{'开' if cfg.get('moment_enabled', True) else '关'}"
-            f"（最短间隔 {cfg.get('moment_min_interval_hours', 6)} 小时）\n"
-            f"上次发空间：{self._scheduler._last_moment or '无'}"
-        )
+        yield event.plain_result(self._scheduler.status_text())
 
     @filter.command("图恒宇测试")
     async def test_moment(self, event: AstrMessageEvent):

@@ -1,53 +1,49 @@
 """生活调度器：决定「什么时候该有行动」。
 
-第一版只做一条流水线：检查作息 → 掷骰子 → 发空间。
-后续行动（表情包 / 主动发言 / 怼人时机）都挂到 _act() 上。
+一条流水线：看作息 → 醒着吗 → 掷骰子 → 行动。
+作息由 core/schedule.py 提供（跟人设走，生成一次存盘，之后只读）。
+
+第一版只有一种行动：发 QQ 空间。
+后续行动（表情包 / 主动发言 / 怼人时机）都挂到 act() 上。
 """
 import asyncio
 import logging
 import random
-from datetime import datetime, time as dtime
+from datetime import datetime
 
 from .llm import generate_moment_text
 from .onebot import OneBotBridge
 from .qzone import QzoneClient
+from .schedule import Schedule
 
 logger = logging.getLogger("astrbot")
 
 
+def _section(config, name: str) -> dict:
+    """安全取嵌套配置段。schema 里的 object 存成嵌套 dict。"""
+    v = config.get(name) if isinstance(config, dict) else None
+    return v if isinstance(v, dict) else {}
+
+
 class LifeScheduler:
-    def __init__(self, context, config):
+    def __init__(self, context, config, data_dir: str):
         self.context = context
-        self.config = config
+        self.config = config or {}
+        self.schedule = Schedule(data_dir, self.config)
         self._last_moment = None  # datetime of last posted moment
         self.bridge = OneBotBridge(context)
         self._qzone = QzoneClient(self.bridge)
 
-    # ---------- 作息 ----------
-    def in_active_hours(self, now: datetime) -> bool:
-        spec = str(self.config.get("active_hours", "09:00-23:00"))
-        t = now.time()
-        for part in spec.split(","):
-            part = part.strip()
-            if "-" not in part:
-                continue
-            a, b = part.split("-", 1)
-            try:
-                start = dtime.fromisoformat(a.strip()[:5])
-                end = dtime.fromisoformat(b.strip()[:5])
-            except ValueError:
-                continue
-            if start <= end:
-                if start <= t <= end:
-                    return True
-            else:  # 跨午夜
-                if t >= start or t <= end:
-                    return True
-        return False
+    # ---------- 启动 ----------
+    async def setup(self) -> None:
+        """初始化作息。内部已有兜底，失败不抛。"""
+        await self.schedule.ensure(self.context)
 
     # ---------- 主循环 ----------
     async def run(self):
-        interval = max(1, int(self.config.get("check_interval_minutes", 30))) * 60
+        interval = max(
+            1, int(_section(self.config, "scheduler").get("check_interval_minutes", 30))
+        ) * 60
         while True:
             try:
                 await asyncio.sleep(interval)
@@ -59,21 +55,25 @@ class LifeScheduler:
 
     async def tick(self):
         now = datetime.now()
-        if not self.in_active_hours(now):
+        st = self.schedule.state_at(now)
+        if not st.awake:
             return
-        if random.random() > float(self.config.get("act_probability", 0.15)):
+        prob = float(_section(self.config, "scheduler").get("act_probability", 0.15))
+        if random.random() > prob:
             return
-        await self.act(now)
+        await self.act(now, st)
 
-    async def act(self, now: datetime):
-        # 第一版只有「发空间」一种行动，后续在此扩展
-        await self.maybe_moment(now)
+    async def act(self, now: datetime, st=None):
+        # 第一版只有「发空间」一种行动，后续在此扩展。
+        # 将来这里会长成「根据 st.scene 决定做什么」。
+        await self.maybe_moment(now, st)
 
     # ---------- 行动：发空间 ----------
-    async def maybe_moment(self, now: datetime):
-        if not self.config.get("moment_enabled", True):
+    async def maybe_moment(self, now: datetime, st=None):
+        moment = _section(self.config, "moment")
+        if not moment.get("enabled", True):
             return
-        min_gap = float(self.config.get("moment_min_interval_hours", 6)) * 3600
+        min_gap = float(moment.get("min_interval_hours", 6)) * 3600
         if self._last_moment and (now - self._last_moment).total_seconds() < min_gap:
             return
 
@@ -99,3 +99,23 @@ class LifeScheduler:
             logger.warning("[图恒宇] QzoneClient 未初始化。")
             return False
         return await self._qzone.publish(content)
+
+    # ---------- 对外：状态文本 ----------
+    def status_text(self) -> str:
+        """给 /图恒宇 命令用。"""
+        now = datetime.now()
+        st = self.schedule.state_at(now)
+        sch = _section(self.config, "scheduler")
+        moment = _section(self.config, "moment")
+        lines = [
+            "[图恒宇] 调度器运行中。",
+            f"此刻：{st.brief()}　（作息来源：{st.source}，{self.schedule.describe()}）",
+            f"检查间隔：{sch.get('check_interval_minutes', 30)} 分钟",
+            f"触发概率：{sch.get('act_probability', 0.15)}",
+            (
+                f"发空间：{'开' if moment.get('enabled', True) else '关'}"
+                f"（最短间隔 {moment.get('min_interval_hours', 6)} 小时）"
+            ),
+            f"上次发空间：{self._last_moment or '无'}",
+        ]
+        return "\n".join(lines)
