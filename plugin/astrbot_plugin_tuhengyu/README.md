@@ -3,7 +3,7 @@
 给 bot「完整的一生」。第一版：**作息 + 调度器 + 发 QQ 空间**。
 
 - 包名：`astrbot_plugin_tuhengyu`
-- 版本：0.2.5
+- 版本：0.2.7
 - 支持平台：`aiocqhttp`（OneBot v11）
 - 许可：待定（见项目 README）
 
@@ -38,7 +38,7 @@ docker restart astrbot
 启动成功的话，日志里会出现：
 
 ```
-Plugin astrbot_plugin_tuhengyu (0.2.5) by starfishCN
+Plugin astrbot_plugin_tuhengyu (0.2.7) by starfishCN
 [图恒宇] 生活调度器已启动。
 ```
 

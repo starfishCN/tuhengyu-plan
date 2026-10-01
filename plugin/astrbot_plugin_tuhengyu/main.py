@@ -109,7 +109,10 @@ class TuhengyuPlugin(Star):
         from .core.llm import generate_moment_text
 
         st = self._scheduler.schedule.state_at()
-        content = await generate_moment_text(self.context, self.config, st.now_line())
+        # 关键：把当前人设传进去。不传就会退回通用口吻 → 说说不带人设（老问题）。
+        content = await generate_moment_text(
+            self.context, self.config, st.now_line(), self._scheduler.persona_text
+        )
         if not content:
             return {"ok": False, "message": "内容生成失败：没有可用模型，看日志。", "state": st.brief()}
         ok = await self._scheduler._post_moment(content)
