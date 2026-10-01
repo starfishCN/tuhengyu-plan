@@ -3,7 +3,7 @@
 给 bot「完整的一生」。第一版：**作息 + 调度器 + 发 QQ 空间**。
 
 - 包名：`astrbot_plugin_tuhengyu`
-- 版本：0.2.2
+- 版本：0.2.3
 - 支持平台：`aiocqhttp`（OneBot v11）
 - 许可：待定（见项目 README）
 
@@ -38,7 +38,7 @@ docker restart astrbot
 启动成功的话，日志里会出现：
 
 ```
-Plugin astrbot_plugin_tuhengyu (0.2.0) by starfishCN
+Plugin astrbot_plugin_tuhengyu (0.2.3) by starfishCN
 [图恒宇] 生活调度器已启动。
 ```
 
@@ -48,6 +48,27 @@ Plugin astrbot_plugin_tuhengyu (0.2.0) by starfishCN
 |---|---|
 | `/图恒宇` | 看调度器状态（作息、间隔、概率、上次发空间时间） |
 | `/图恒宇测试` | **立刻**生成并发布一条，用于验证链路 |
+
+## 插件页面（WebUI 内）
+
+在 WebUI 的插件详情页里有一页「运行状态」（`pages/status/`），不用敲命令就能看：
+
+- 此刻状态（scene · state）、醒着/睡着、作息来源与段数
+- 触发概率：基准 × 状态倍数 → 生效值
+- 检查间隔、发空间开关与最短间隔、上次发空间时间
+- 作息时段表（当前命中的那一行高亮）
+- 按钮：**刷新**、**重算作息**（丢掉盘上作息重新生成）
+
+页面的后端 API 由插件自己注册（路由带插件名前缀）：
+
+| 方法 | 路由 | 作用 |
+|---|---|---|
+| GET | `/astrbot_plugin_tuhengyu/status` | 结构化运行状态 |
+| POST | `/astrbot_plugin_tuhengyu/reschedule` | 丢弃旧作息并重新生成 |
+
+页面里的相对 endpoint（`status` / `reschedule`）会被 bridge 拼成
+`/api/v1/plugins/extensions/astrbot_plugin_tuhengyu/<endpoint>`。
+改页面静态文件刷新页面即可；**新增或删除页面目录**要重载插件。
 
 ## 配置
 
@@ -64,7 +85,11 @@ Plugin astrbot_plugin_tuhengyu (0.2.0) by starfishCN
 | `schedule` | `generate_model` | 生成作息用的模型，留空用 AstrBot 当前默认 | 空 |
 | `scheduler` | `check_interval_minutes` | 调度器多久检查一次 | `30` |
 | `scheduler` | `act_probability` | 每次检查触发行动的**基础**概率 | `0.15` |
-| `scheduler` | `state_bias` | 按此刻状态加权（忙 0.35 倍 / 闲 1.6 倍，封顶 0.9） | `true` |
+| `scheduler` | `state_bias` | 按此刻状态加权（倍数与词表见下面四项） | `true` |
+| `scheduler` | `bias_busy_factor` | 「在忙」时的概率倍数，小于 1 即压低 | `0.35` |
+| `scheduler` | `bias_idle_factor` | 「闲着」时的概率倍数，大于 1 即提高 | `1.6` |
+| `scheduler` | `bias_busy_keywords` | 判定「在忙」的关键词，逗号分隔，留空用内置 | 空 |
+| `scheduler` | `bias_idle_keywords` | 判定「闲着」的关键词，逗号分隔，留空用内置 | 空 |
 | `moment` | `enabled` | 是否允许发空间 | `true` |
 | `moment` | `min_interval_hours` | 两次发空间的最小间隔（小时） | `6` |
 | `moment` | `prompt` | 发说说时给模型的指令 | 空 |

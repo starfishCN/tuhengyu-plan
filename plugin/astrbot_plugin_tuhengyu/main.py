@@ -16,8 +16,12 @@ from datetime import datetime
 
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star
+from astrbot.api.web import error_response, json_response
 
 from .core.scheduler import LifeScheduler
+
+# Web API 路由必须以插件名为前缀（AstrBot 约定，2026-10-01 核对官方文档）。
+PLUGIN_NAME = "astrbot_plugin_tuhengyu"
 
 
 class TuhengyuPlugin(Star):
@@ -26,6 +30,22 @@ class TuhengyuPlugin(Star):
         self.config = config or {}
         self._scheduler = None
         self._task = None
+        # 注册插件页面的后端 API（页面在 pages/status/）。
+        try:
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/status",
+                self.page_status,
+                ["GET"],
+                "插件页面：运行状态",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/reschedule",
+                self.page_reschedule,
+                ["POST"],
+                "插件页面：重算作息",
+            )
+        except Exception as e:  # 注册失败不影响主体功能
+            self.logger.warning(f"[图恒宇] 注册页面 API 失败：{e}")
 
     # ---------- 生命周期 ----------
     async def initialize(self):
@@ -89,3 +109,24 @@ class TuhengyuPlugin(Star):
                 yield event.plain_result("[图恒宇] 发布失败，看 AstrBot 日志里的 [图恒宇] 行。")
         except Exception as e:
             yield event.plain_result(f"[图恒宇] 出错：{e}")
+
+    # ---------- 插件页面 API ----------
+    async def page_status(self):
+        """GET /astrbot_plugin_tuhengyu/status —— 结构化运行状态。"""
+        if self._scheduler is None:
+            return json_response({"running": False})
+        data = self._scheduler.status_dict()
+        data["running"] = True
+        return json_response(data)
+
+    async def page_reschedule(self):
+        """POST /astrbot_plugin_tuhengyu/reschedule —— 丢弃旧作息并重新生成。"""
+        if self._scheduler is None:
+            return error_response("调度器未运行（插件可能被禁用）", status_code=409)
+        try:
+            await self._scheduler.schedule.regenerate(self.context)
+        except Exception as e:
+            return error_response(f"重算失败：{e}", status_code=500)
+        data = self._scheduler.status_dict()
+        data["running"] = True
+        return json_response(data)

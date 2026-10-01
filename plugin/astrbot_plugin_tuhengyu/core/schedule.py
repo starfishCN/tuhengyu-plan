@@ -176,6 +176,21 @@ class Schedule:
         else:
             self._fallback("生成失败")
 
+    def periods(self) -> list[dict]:
+        """当前生效的时段表（副本），给状态查询用。"""
+        return [dict(p) for p in (self._periods or CONSERVATIVE_PERIODS)]
+
+    async def regenerate(self, context) -> None:
+        """丢掉盘上的作息，重新生成一份（插件页面的「重算作息」按钮）。"""
+        try:
+            if os.path.exists(self.path):
+                os.remove(self.path)
+        except OSError as e:
+            logger.warning(f"[图恒宇] 删除旧作息失败：{e}")
+        self._periods = []
+        self._source = "conservative"
+        await self.ensure(context)
+
     def _fallback(self, reason: str) -> None:
         logger.warning(f"[图恒宇] 作息：{reason}，用保守默认。")
         self._periods = [dict(p) for p in CONSERVATIVE_PERIODS]

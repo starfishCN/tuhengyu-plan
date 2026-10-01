@@ -164,6 +164,35 @@ class LifeScheduler:
             return False
         return await self._qzone.publish(content)
 
+    # ---------- 对外：结构化状态（给插件页面用） ----------
+    def status_dict(self) -> dict:
+        """把 status_text() 的信息转成结构化数据，供 Web API 返回。"""
+        now = datetime.now()
+        st = self.schedule.state_at(now)
+        sch = _section(self.config, "scheduler")
+        moment = _section(self.config, "moment")
+        base = float(sch.get("act_probability", 0.15))
+        bias_on = bool(sch.get("state_bias", True))
+        factor = state_bias(st, self.config) if bias_on else 1.0
+        eff = min(PROB_CAP, max(0.0, base * factor))
+        return {
+            "now": now.strftime("%Y-%m-%d %H:%M:%S"),
+            "awake": st.awake,
+            "scene": st.scene,
+            "state": st.state,
+            "source": st.source,
+            "schedule_desc": self.schedule.describe(),
+            "periods": self.schedule.periods(),
+            "check_interval_minutes": sch.get("check_interval_minutes", 30),
+            "act_probability": base,
+            "state_bias_on": bias_on,
+            "bias_factor": round(factor, 3),
+            "effective_probability": round(eff, 4),
+            "moment_enabled": bool(moment.get("enabled", True)),
+            "moment_min_interval_hours": moment.get("min_interval_hours", 6),
+            "last_moment": self._last_moment.strftime("%Y-%m-%d %H:%M:%S") if self._last_moment else None,
+        }
+
     # ---------- 对外：状态文本 ----------
     def status_text(self) -> str:
         """给 /图恒宇 命令用。"""

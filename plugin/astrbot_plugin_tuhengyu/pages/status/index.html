@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>图恒宇 · 运行状态</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="head">
+        <h1 id="title">运行状态</h1>
+        <div class="head-right">
+          <span id="clock" class="clock">—</span>
+          <button id="refresh" class="btn btn-ghost" type="button">刷新</button>
+          <button id="reschedule" class="btn" type="button">重算作息</button>
+        </div>
+      </header>
+
+      <p id="notice" class="notice" hidden></p>
+
+      <section class="hero">
+        <div class="hero-main">
+          <span id="scene" class="scene">读取中 …</span>
+          <span id="awake" class="pill">—</span>
+        </div>
+        <div class="hero-sub">
+          <span>作息来源：<b id="source">—</b></span>
+          <span id="schedule-desc">—</span>
+        </div>
+      </section>
+
+      <section class="grid">
+        <div class="card">
+          <div class="card-label">触发概率</div>
+          <div id="prob" class="card-value">—</div>
+          <div id="prob-detail" class="card-hint">—</div>
+        </div>
+        <div class="card">
+          <div class="card-label">检查间隔</div>
+          <div id="interval" class="card-value">—</div>
+          <div class="card-hint">调度器轮询周期</div>
+        </div>
+        <div class="card">
+          <div class="card-label">发空间</div>
+          <div id="moment" class="card-value">—</div>
+          <div id="moment-detail" class="card-hint">—</div>
+        </div>
+        <div class="card">
+          <div class="card-label">上次发空间</div>
+          <div id="last-moment" class="card-value">—</div>
+          <div class="card-hint">重启后重置（内存态）</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>作息时段</h2>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>时段</th>
+              <th>场景</th>
+              <th>状态</th>
+              <th>醒着</th>
+            </tr>
+          </thead>
+          <tbody id="periods">
+            <tr><td colspan="4" class="empty">读取中 …</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
