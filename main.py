@@ -18,6 +18,7 @@ from core.docker import DOCKER_CMDS, apply_mirror_cmds
 from core.snowluma import snowluma_cmds
 from core.astrbot import ASTRBOT_CMDS
 from core import sources
+from core import credentials
 
 STATE = {"busy": False, "mirror": None, "proxy": None}
 LOG = None
@@ -134,6 +135,54 @@ def source_section():
     ui.button("应用选中的镜像加速（写 daemon.json 并重启 Docker）", on_click=apply_mirror)
 
 
+def credential_section():
+    ui.markdown(
+        "装完之后，各家控制台的密码分散在**容器日志**和**环境变量**里，"
+        "新手很难找到。点下面的按钮，面板替你读出来。\n\n"
+        "⚠️ 读到的都是**初始密码**。如果你已经改过密码，这里显示的是旧值，"
+        "**以你改后的为准**。"
+    )
+
+    ui.markdown("**各服务的端口**（从外网访问时，端口换成你在云控制台映射的那个）")
+    for name, port, hint in credentials.PORTS:
+        line = f"- {name}：`{port}`"
+        if hint:
+            line += f"　—　{hint}"
+        ui.markdown(line)
+
+    box = ui.column().classes("w-full")
+
+    async def refresh():
+        box.clear()
+        with box:
+            ui.label("读取中 ...")
+        try:
+            rows = await credentials.gather()
+        except Exception as exc:
+            box.clear()
+            with box:
+                ui.label(f"读取失败：{exc}")
+            return
+        box.clear()
+        with box:
+            for r in rows:
+                with ui.row().classes("items-center gap-2 no-wrap"):
+                    ui.label(f"{r['name']}（{r['port']}）").classes("w-52")
+                    if r["ok"]:
+                        ui.label(r["value"]).classes("font-mono text-base")
+                        ui.button(
+                            icon="content_copy",
+                            on_click=lambda v=r["value"]: ui.run_javascript(
+                                f"navigator.clipboard.writeText({v!r})"
+                            ),
+                        ).props("flat dense")
+                    else:
+                        ui.label("—— 没读到").classes("text-gray-500")
+                ui.label(r["note"]).classes("text-xs text-gray-500")
+
+    ui.button("读取 / 刷新", on_click=refresh)
+
+
 @ui.page("/")
 def index():
     global LOG
@@ -157,6 +206,9 @@ def index():
 
     with ui.expansion("网络源（测速 / 自动选优）", value=True):
         source_section()
+
+    with ui.expansion("找不到密码？点这里读初始凭据", value=False):
+        credential_section()
 
     LOG = ui.log(max_lines=4000).classes("w-full h-96")
 

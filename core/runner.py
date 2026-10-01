@@ -42,3 +42,20 @@ async def run_stream_all(cmds, on_line, on_step=None) -> int:
             on_line("!! 该步骤失败，已停止。")
             break
     return code
+
+
+async def run_capture(cmd: str) -> tuple:
+    """跑一条命令并拿回 (退出码, 合并输出)。
+
+    与 run_stream 的区别：不逐行推给日志，而是等命令结束后一次性返回结果。
+    用于「读凭据」这类需要拿到返回值、且不该把密码刷进日志的场景。
+    """
+    proc = await asyncio.create_subprocess_shell(
+        cmd,
+        stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        env=CHILD_ENV,
+    )
+    out, _ = await proc.communicate()
+    return await proc.wait(), out.decode(errors="replace")
