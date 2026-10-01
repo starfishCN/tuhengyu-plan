@@ -1,0 +1,47 @@
+{
+  "enabled": {
+    "description": "是否启用插件（关掉则不启动调度器）",
+    "type": "bool",
+    "default": true
+  },
+  "active_hours": {
+    "description": "活跃时段，24 小时制，形如 09:00-23:00；跨午夜或全天可写 00:00-24:00，多段用英文逗号分隔",
+    "type": "string",
+    "default": "09:00-23:00"
+  },
+  "check_interval_minutes": {
+    "description": "调度器多久检查一次「现在该不该行动」（分钟）",
+    "type": "int",
+    "default": 30
+  },
+  "act_probability": {
+    "description": "活跃时段内，每次检查触发行动的概率（0-1）",
+    "type": "float",
+    "default": 0.15
+  },
+  "moment_enabled": {
+    "description": "是否允许主动发 QQ 空间动态",
+    "type": "bool",
+    "default": true
+  },
+  "moment_min_interval_hours": {
+    "description": "两次发空间之间的最小间隔（小时）",
+    "type": "int",
+    "default": 6
+  },
+  "llm_provider_id": {
+    "description": "用来生成说说内容的模型 ID（填 AstrBot 模型提供商里的 ID，如 openai/LongCat-2.5-Preview）。留空则用 AstrBot 当前默认模型",
+    "type": "string",
+    "default": ""
+  },
+  "persona_prompt": {
+    "description": "人设提示词：告诉它「你是谁」。留空则用内置的通用口吻。想让它像某个角色，就在这里写人设",
+    "type": "text",
+    "default": ""
+  },
+  "moment_prompt": {
+    "description": "发说说时给模型的指令。留空则用内置默认（20-60 字，口语，此刻所见所想）",
+    "type": "text",
+    "default": ""
+  }
+}
