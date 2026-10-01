@@ -16,6 +16,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import random
 from pathlib import Path
@@ -95,4 +96,43 @@ def read_base64(path: Path) -> str | None:
     except OSError as e:
         logger.warning(f"[图恒宇] 读表情包失败：{e}")
         return None
-        return None
+
+
+def save_collected(
+    dest_root,
+    src_path,
+    label: str = "collected",
+    max_bytes: int = 5 * 1024 * 1024,
+) -> bool:
+    """把一张收到的图存进表情包库（对话中自动收集）。
+
+    去重：以内容 md5 命名，同内容第二次不再存。
+    返回是否新存了一张。单张上限 max_bytes，超限丢弃。
+    """
+    src = Path(src_path)
+    try:
+        if not src.is_file():
+            return False
+        size = src.stat().st_size
+        if size <= 0 or size > max_bytes:
+            return False
+        data = src.read_bytes()
+    except OSError as e:
+        logger.warning(f"[图恒宇] 收集表情包读取失败：{e}")
+        return False
+
+    digest = hashlib.md5(data).hexdigest()[:16]
+    ext = src.suffix.lower()
+    if ext not in IMAGE_EXTS:
+        ext = ".png"
+    dest_dir = Path(dest_root) / (str(label or "").strip() or "collected")
+    try:
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / f"{digest}{ext}"
+        if dest.exists():
+            return False
+        dest.write_bytes(data)
+        return True
+    except OSError as e:
+        logger.warning(f"[图恒宇] 收集表情包写入失败：{e}")
+        return False

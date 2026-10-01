@@ -9,118 +9,149 @@
   <body>
     <main class="wrap">
       <header class="head">
-        <h1 id="title">运行状态</h1>
+        <h1 id="title">图恒宇计划</h1>
         <div class="head-right">
           <span id="clock" class="clock">—</span>
           <button id="refresh" class="btn btn-ghost" type="button">刷新</button>
         </div>
       </header>
 
+      <nav class="tabs" id="tabs">
+        <button class="tab active" data-tab="status" type="button">状态</button>
+        <button class="tab" data-tab="actions" type="button">操作</button>
+        <button class="tab" data-tab="settings" type="button">设置</button>
+      </nav>
+
       <p id="notice" class="notice" hidden></p>
 
-      <section class="hero">
-        <div class="hero-main">
-          <span id="scene" class="scene">读取中 …</span>
-          <span id="awake" class="pill">—</span>
-        </div>
-        <div class="hero-sub">
-          <span>作息来源：<b id="source">—</b></span>
-          <span id="schedule-desc">—</span>
-          <span>人设：<b id="persona-state">—</b></span>
-        </div>
-        <div id="persona-note" class="hero-note" hidden></div>
+      <!-- ========== 页签 1：状态 ========== -->
+      <section class="tab-pane active" id="pane-status">
+        <section class="hero">
+          <div class="hero-main">
+            <span id="scene" class="scene">读取中 …</span>
+            <span id="awake" class="pill">—</span>
+          </div>
+          <div class="hero-sub">
+            <span>作息来源：<b id="source">—</b></span>
+            <span id="schedule-desc">—</span>
+            <span>人设：<b id="persona-state">—</b></span>
+          </div>
+          <div id="persona-note" class="hero-note" hidden></div>
+        </section>
+
+        <section class="grid">
+          <div class="card">
+            <div class="card-label">触发概率</div>
+            <div id="prob" class="card-value">—</div>
+            <div id="prob-detail" class="card-hint">—</div>
+          </div>
+          <div class="card">
+            <div class="card-label">检查间隔</div>
+            <div id="interval" class="card-value">—</div>
+            <div class="card-hint">调度器轮询周期</div>
+          </div>
+          <div class="card">
+            <div class="card-label">发空间</div>
+            <div id="moment" class="card-value">—</div>
+            <div id="moment-detail" class="card-hint">—</div>
+          </div>
+          <div class="card">
+            <div class="card-label">上次发空间</div>
+            <div id="last-moment" class="card-value">—</div>
+            <div class="card-hint">重启后重置（内存态）</div>
+          </div>
+          <div class="card">
+            <div class="card-label">表情包</div>
+            <div id="sticker" class="card-value">—</div>
+            <div id="sticker-detail" class="card-hint">—</div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>作息时段</h2>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>时段</th>
+                <th>场景</th>
+                <th>状态</th>
+                <th>醒着</th>
+              </tr>
+            </thead>
+            <tbody id="periods">
+              <tr><td colspan="4" class="empty">读取中 …</td></tr>
+            </tbody>
+          </table>
+        </section>
       </section>
 
-      <section class="grid">
-        <div class="card">
-          <div class="card-label">触发概率</div>
-          <div id="prob" class="card-value">—</div>
-          <div id="prob-detail" class="card-hint">—</div>
-        </div>
-        <div class="card">
-          <div class="card-label">检查间隔</div>
-          <div id="interval" class="card-value">—</div>
-          <div class="card-hint">调度器轮询周期</div>
-        </div>
-        <div class="card">
-          <div class="card-label">发空间</div>
-          <div id="moment" class="card-value">—</div>
-          <div id="moment-detail" class="card-hint">—</div>
-        </div>
-        <div class="card">
-          <div class="card-label">上次发空间</div>
-          <div id="last-moment" class="card-value">—</div>
-          <div class="card-hint">重启后重置（内存态）</div>
-        </div>
-        <div class="card">
-          <div class="card-label">表情包</div>
-          <div id="sticker" class="card-value">—</div>
-          <div id="sticker-detail" class="card-hint">—</div>
-        </div>
+      <!-- ========== 页签 2：操作 ========== -->
+      <section class="tab-pane" id="pane-actions">
+        <section class="panel">
+          <h2>操作</h2>
+
+          <div class="action">
+            <div class="action-main">
+              <button id="reschedule" class="btn" type="button">重算作息</button>
+              <div class="action-text">
+                <div class="action-title">换人设后按这个</div>
+                <div class="action-desc">
+                  丢弃盘上已有的作息，重新读<b>当前人设</b>，让模型按新的人设生成一份一天的作息。
+                  人设来自 AstrBot 的「人格」（在「设置」页选，或留空跟随默认），
+                  改完人设不按这里，作息不会自己变。
+                </div>
+                <div id="reschedule-warn" class="action-warn" hidden></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="action">
+            <div class="action-main">
+              <button id="test-moment" class="btn btn-warn" type="button">测试发一条</button>
+              <div class="action-text">
+                <div class="action-title">立刻发一条 QQ 空间动态（调试用）</div>
+                <div class="action-desc">
+                  等同 QQ 里的 <code>/图恒宇测试</code>：用当前作息生成一条内容并发出去。
+                  <b>会产生真实的空间动态</b>，不要频繁点。
+                </div>
+                <div id="test-result" class="action-result" hidden></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="action">
+            <div class="action-main">
+              <button id="sticker-reload" class="btn btn-ghost" type="button">重扫表情包</button>
+              <div class="action-text">
+                <div class="action-title">放完表情包后按这个</div>
+                <div class="action-desc">
+                  重新扫描表情包目录。把图放进插件数据目录的 <code>stickers/</code>（子目录名就是标签）后，
+                  按一下即可生效，不必重载插件。对话里收到别人发的图会<b>自动存进</b> <code>collected/</code>。
+                </div>
+                <div id="sticker-result" class="action-result" hidden></div>
+              </div>
+            </div>
+          </div>
+        </section>
       </section>
 
-      <section class="panel">
-        <h2>操作</h2>
-
-        <div class="action">
-          <div class="action-main">
-            <button id="reschedule" class="btn" type="button">重算作息</button>
-            <div class="action-text">
-              <div class="action-title">换人设后按这个</div>
-              <div class="action-desc">
-                丢弃盘上已有的作息，重新读<b>当前人设</b>，让模型按新的人设生成一份一天的作息。
-                人设来自 AstrBot 的「人格」（在插件配置的「人格」里选，或留空跟随默认），
-                改完人设不按这里，作息不会自己变。
-              </div>
-              <div id="reschedule-warn" class="action-warn" hidden></div>
-            </div>
+      <!-- ========== 页签 3：设置 ========== -->
+      <section class="tab-pane" id="pane-settings">
+        <section class="panel">
+          <h2>设置</h2>
+          <p class="set-tip">
+            这些就是插件配置。分组可折叠，改完点最下面的「保存设置」。
+            与 AstrBot 官方设置页写的是同一份配置。
+          </p>
+          <div id="settings" class="settings">
+            <div class="empty">读取中 …</div>
           </div>
-        </div>
-
-        <div class="action">
-          <div class="action-main">
-            <button id="test-moment" class="btn btn-warn" type="button">测试发一条</button>
-            <div class="action-text">
-              <div class="action-title">立刻发一条 QQ 空间动态（调试用）</div>
-              <div class="action-desc">
-                等同 QQ 里的 <code>/图恒宇测试</code>：用当前作息生成一条内容并发出去。
-                <b>会产生真实的空间动态</b>，不要频繁点。
-              </div>
-              <div id="test-result" class="action-result" hidden></div>
-            </div>
+          <div class="set-actions">
+            <button id="save-settings" class="btn" type="button">保存设置</button>
+            <button id="reload-settings" class="btn btn-ghost" type="button">放弃改动</button>
           </div>
-        </div>
-
-        <div class="action">
-          <div class="action-main">
-            <button id="sticker-reload" class="btn btn-ghost" type="button">重扫表情包</button>
-            <div class="action-text">
-              <div class="action-title">放完表情包后按这个</div>
-              <div class="action-desc">
-                重新扫描表情包目录。把图放进插件数据目录的 <code>stickers/</code>（子目录名就是标签）后，
-                按一下即可生效，不必重载插件。
-              </div>
-              <div id="sticker-result" class="action-result" hidden></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2>作息时段</h2>
-        <table class="table">
-          <thead>
-            <tr>
-              <th>时段</th>
-              <th>场景</th>
-              <th>状态</th>
-              <th>醒着</th>
-            </tr>
-          </thead>
-          <tbody id="periods">
-            <tr><td colspan="4" class="empty">读取中 …</td></tr>
-          </tbody>
-        </table>
+          <div id="settings-result" class="action-result" hidden></div>
+        </section>
       </section>
     </main>
 

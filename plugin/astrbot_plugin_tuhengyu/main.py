@@ -16,12 +16,14 @@ import random
 from datetime import datetime
 
 from astrbot.api.event import filter, AstrMessageEvent
+from astrbot.api.event.filter import EventMessageType
+from astrbot.api.message_components import Image
 from astrbot.api.star import Context, Star
-from astrbot.api.web import error_response, json_response
+from astrbot.api.web import error_response, json_response, request as web_request
 
 from .core.persona import resolve_persona
 from .core.scheduler import LifeScheduler
-from .core.stickers import read_base64
+from .core.stickers import read_base64, save_collected
 
 # Web API 路由必须以插件名为前缀（AstrBot 约定，2026-10-01 核对官方文档）。
 PLUGIN_NAME = "astrbot_plugin_tuhengyu"
@@ -58,6 +60,18 @@ class TuhengyuPlugin(Star):
                 self.page_sticker_reload,
                 ["POST"],
                 "插件页面：重扫表情包目录",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/settings",
+                self.page_settings_get,
+                ["GET"],
+                "插件页面：读取设置",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/settings",
+                self.page_settings_post,
+                ["POST"],
+                "插件页面：保存设置",
             )
         except Exception as e:  # 注册失败不影响主体功能
             self.logger.warning(f"[图恒宇] 注册页面 API 失败：{e}")
@@ -146,6 +160,44 @@ class TuhengyuPlugin(Star):
 
         result.chain.append(Image.fromBase64(b64))
 
+    # ---------- 对话中自动收集表情包 ----------
+    @filter.event_message_type(EventMessageType.ALL)
+    async def collect_sticker(self, event: AstrMessageEvent):
+        """把对话里收到的图片存进表情包库（bot 自己攒表情包）。
+
+        只存图，不改消息、不回复。同内容按 md5 去重。
+        """
+        if self._scheduler is None:
+            return
+        sec = self.config.get("sticker") if isinstance(self.config, dict) else None
+        sec = sec if isinstance(sec, dict) else {}
+        if not sec.get("collect_enabled", True):
+            return
+        try:
+            msgs = event.get_messages()
+        except Exception:
+            return
+        imgs = [m for m in msgs if isinstance(m, Image)]
+        if not imgs:
+            return
+
+        import os
+
+        label = str(sec.get("collect_label", "collected") or "collected").strip() or "collected"
+        root = os.path.join(self._data_dir(), "stickers")
+        saved = 0
+        for img in imgs[:2]:  # 单条消息最多收两张，避免刷屏
+            try:
+                path = await img.convert_to_file_path()
+            except Exception as e:  # 下载/解析失败不影响消息流程
+                self.logger.debug(f"[图恒宇] 取图失败：{e}")
+                continue
+            if save_collected(root, path, label):
+                saved += 1
+        if saved:
+            self._scheduler.stickers.reload()
+            self.logger.info(f"[图恒宇] 对话中收集到 {saved} 张表情包 → {label}/")
+
     # ---------- 命令 ----------
     async def _publish_once(self) -> dict:
         """生成并发布一条空间动态。命令与插件页面共用同一条路径。"""
@@ -233,6 +285,7 @@ class TuhengyuPlugin(Star):
         data = self._scheduler.status_dict()
         data["running"] = True
         data["result"] = result
+        return json_response(data)
 
     async def page_sticker_reload(self):
         """POST /astrbot_plugin_tuhengyu/sticker-reload —— 重扫表情包目录。"""
@@ -245,4 +298,140 @@ class TuhengyuPlugin(Star):
         data = self._scheduler.status_dict()
         data["running"] = True
         return json_response(data)
+
+    # ---------- 插件页面：设置读写 ----------
+    def _load_schema(self) -> dict:
+        """读插件同级的 _conf_schema.json（设置页据此渲染控件）。"""
+        import json
+        import os
+
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_conf_schema.json")
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            self.logger.warning(f"[图恒宇] 读取 _conf_schema.json 失败：{e}")
+            return {}
+
+    def _config_values(self) -> dict:
+        """当前配置的纯数据副本（保证可 JSON 序列化）。"""
+        import json
+
+        try:
+            return json.loads(json.dumps(dict(self.config), ensure_ascii=False, default=str))
+        except Exception:
+            return {}
+
+    @staticmethod
+    def _coerce(value, sch):
+        """按 schema 的 type 归一化单值。"""
+        typ = (sch or {}).get("type")
+        if typ == "bool":
+            if isinstance(value, bool):
+                return value
+            return str(value).strip().lower() in ("1", "true", "yes", "on", "是", "开")
+        if typ == "int":
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return 0
+        if typ == "float":
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return 0.0
+        return "" if value is None else str(value)
+
+    def _merge_settings(self, payload: dict) -> dict:
+        """只接受 schema 里声明过的键，其余忽略（防写坏配置）。"""
+        import json
+
+        schema = self._load_schema()
+        out = json.loads(json.dumps(dict(self.config), ensure_ascii=False, default=str))
+        for key, sch in schema.items():
+            if key not in payload:
+                continue
+            val = payload[key]
+            if (sch or {}).get("type") == "object":
+                if not isinstance(val, dict):
+                    continue
+                cur = out.get(key)
+                if not isinstance(cur, dict):
+                    cur = {}
+                for sub, subsch in ((sch or {}).get("items") or {}).items():
+                    if sub in val:
+                        cur[sub] = self._coerce(val[sub], subsch)
+                out[key] = cur
+            else:
+                out[key] = self._coerce(val, sch)
+        return out
+
+    async def _collect_options(self) -> dict:
+        """下拉选项：可用人格 + 可用模型提供商。"""
+        personas = []
+        pm = getattr(self.context, "persona_manager", None)
+        if pm is not None:
+            try:
+                for p in await pm.get_all_personas():
+                    pid = str(getattr(p, "persona_id", "") or "")
+                    name = str(getattr(p, "name", "") or "")
+                    if pid:
+                        personas.append({"id": pid, "name": name or pid})
+            except Exception as e:
+                self.logger.warning(f"[图恒宇] 取人格列表失败：{e}")
+        providers = []
+        try:
+            for prv in self.context.get_all_providers():
+                pid = ""
+                model = ""
+                try:
+                    m = prv.meta()
+                    pid = str(getattr(m, "id", "") or "")
+                    model = str(getattr(m, "model", "") or "")
+                except Exception:
+                    pass
+                if not pid:
+                    try:
+                        pid = str((getattr(prv, "provider_config", {}) or {}).get("id", "") or "")
+                    except Exception:
+                        pid = ""
+                if pid:
+                    providers.append({"id": pid, "name": f"{pid}（{model}）" if model else pid})
+        except Exception as e:
+            self.logger.warning(f"[图恒宇] 取模型列表失败：{e}")
+        return {"persona": personas, "provider": providers}
+
+    async def page_settings_get(self):
+        """GET /astrbot_plugin_tuhengyu/settings —— schema + 当前值 + 下拉选项。"""
+        return json_response(
+            {
+                "schema": self._load_schema(),
+                "values": self._config_values(),
+                "options": await self._collect_options(),
+            }
+        )
+
+    async def page_settings_post(self):
+        """POST /astrbot_plugin_tuhengyu/settings —— 保存设置（body = 完整值对象）。"""
+        try:
+            payload = await web_request.json({})
+        except Exception as e:
+            return error_response(f"读取请求体失败：{e}", status_code=400)
+        if not isinstance(payload, dict) or not payload:
+            return error_response("请求体不是有效的设置对象", status_code=400)
+        try:
+            merged = self._merge_settings(payload)
+        except Exception as e:
+            return error_response(f"设置格式错误：{e}", status_code=400)
+        try:
+            self.config.update(merged)
+            save = getattr(self.config, "save_config", None)
+            if callable(save):
+                save()
+        except Exception as e:
+            return error_response(f"保存失败：{e}", status_code=500)
+        await self._refresh_persona()  # 人设/模型可能改了
+        data = self._scheduler.status_dict() if self._scheduler is not None else {}
+        data["running"] = self._scheduler is not None
+        return json_response({"ok": True, "values": self._config_values(), "status": data})
         return json_response(data)

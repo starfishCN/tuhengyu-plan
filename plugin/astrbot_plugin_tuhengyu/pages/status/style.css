@@ -316,3 +316,154 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* ---------- 页签 ---------- */
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  padding: 8px 14px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.tab:hover {
+  color: var(--fg);
+}
+
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.tab-pane {
+  display: none;
+}
+
+.tab-pane.active {
+  display: block;
+}
+
+/* ---------- 设置 ---------- */
+
+.set-tip {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.settings .empty {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 14px 0;
+}
+
+.set-group {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.set-group > summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  font-weight: 600;
+  background: var(--bg);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.set-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.set-group > summary::before {
+  content: "▸";
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.set-group[open] > summary::before {
+  content: "▾";
+}
+
+.set-group-body {
+  padding: 6px 12px 12px;
+}
+
+.set-field {
+  padding: 8px 0;
+  border-top: 1px dashed var(--line);
+}
+
+.set-field:first-child {
+  border-top: none;
+}
+
+.set-name {
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.set-hint {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.set-group-hint {
+  margin: 4px 0 2px;
+}
+
+.set-input {
+  width: 100%;
+  max-width: 520px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--fg);
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.set-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+input.set-input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+}
+
+textarea.set-input {
+  resize: vertical;
+  line-height: 1.55;
+}
+
+select.set-input {
+  cursor: pointer;
+}
+
+.set-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}

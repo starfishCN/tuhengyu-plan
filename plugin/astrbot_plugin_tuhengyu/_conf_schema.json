@@ -194,6 +194,18 @@
         "description": "每条回复附带表情包的概率（0-1）",
         "hint": "默认 0.35。调太高会每条都发图，像刷屏。",
         "default": 0.35
+      },
+      "collect_enabled": {
+        "type": "bool",
+        "description": "对话中自动收集表情包",
+        "hint": "开启后，别人在群里 / 私聊发的图片会被 bot 存进表情包库（同图按内容去重，单张上限 5MB）。",
+        "default": true
+      },
+      "collect_label": {
+        "type": "string",
+        "description": "收集来的表情包放进哪个标签目录",
+        "hint": "默认 collected。留默认即可；想分开存可改。",
+        "default": "collected"
       }
     }
   }

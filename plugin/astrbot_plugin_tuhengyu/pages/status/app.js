@@ -1,8 +1,11 @@
-// 图恒宇 · 运行状态页面
-// 通过 AstrBot 注入的 window.AstrBotPluginPage bridge 与插件后端通信。
-//   apiGet("status")        -> /api/v1/plugins/extensions/astrbot_plugin_tuhengyu/status
-//   apiPost("reschedule")   -> …/reschedule
-//   apiPost("test-moment")  -> …/test-moment
+// 图恒宇 · 控制台页面（状态 / 操作 / 设置 三页签）
+// 经 AstrBot 注入的 window.AstrBotPluginPage bridge 与后端通信：
+//   apiGet("status")          读取运行状态
+//   apiPost("reschedule")     重算作息
+//   apiPost("test-moment")    立即发一条空间动态
+//   apiPost("sticker-reload") 重扫表情包目录
+//   apiGet("settings")        读设置（schema + 当前值 + 下拉选项）
+//   apiPost("settings")       保存设置
 
 const bridge = window.AstrBotPluginPage;
 
@@ -11,7 +14,21 @@ const DASH = "—";
 
 function text(id, value) {
   const node = $(id);
-  if (node) node.textContent = (value === null || value === undefined || value === "") ? DASH : String(value);
+  if (node) {
+    node.textContent =
+      value === null || value === undefined || value === "" ? DASH : String(value);
+  }
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => {
+    const code = c.charCodeAt(0);
+    if (code === 38) return "&" + "amp;";
+    if (code === 60) return "&" + "lt;";
+    if (code === 62) return "&" + "gt;";
+    if (code === 34) return "&" + "quot;";
+    return "&" + "#39;";
+  });
 }
 
 function toMinutes(hhmm) {
@@ -24,7 +41,7 @@ function hitNow(start, end, nowMin) {
   const a = toMinutes(start);
   const b = toMinutes(end);
   if (a === null || b === null || nowMin === null) return false;
-  return a <= b ? (nowMin >= a && nowMin <= b) : (nowMin >= a || nowMin <= b);
+  return a <= b ? nowMin >= a && nowMin <= b : nowMin >= a || nowMin <= b;
 }
 
 function showNotice(message, isError) {
@@ -92,7 +109,6 @@ function render(data) {
   text("schedule-desc", data.schedule_desc ?? DASH);
   text("clock", data.now ?? DASH);
 
-  // 人设 / 作息模式：决定「重算作息」按钮会得到什么
   if (data.persona_set) {
     text("persona-state", data.persona_label || "已设置");
   } else {
@@ -103,11 +119,11 @@ function render(data) {
     let msg = "";
     if (!data.persona_set) {
       msg =
-        "没读到人设。去 AstrBot 的「人格」里配一个，或在本插件配置的「人格」下拉里指定；都为空时作息只会得到保守默认。";
+        "没读到人设。去 AstrBot 的「人格」里配一个，或在「设置」页的「人格」下拉里指定；都为空时作息只会得到保守默认。";
     } else if (data.schedule_error) {
       msg = `作息没能按人设生成（${data.schedule_error}）。常见原因：AstrBot 里没有可用的对话模型，或模型调用报错 —— 看日志里的 [图恒宇] 行。`;
     } else if (data.persona_pending) {
-      msg = "检测到人设与盘上的作息对不上（换过人格），建议点下面的「重算作息」。";
+      msg = "检测到人设与盘上的作息对不上（换过人格），去「操作」页点「重算作息」。";
     }
     note.hidden = !msg;
     note.textContent = msg;
@@ -117,7 +133,7 @@ function render(data) {
     if (!data.persona_set) {
       warn.hidden = false;
       warn.textContent =
-        "当前没有可用人设，点「重算作息」只会得到保守默认（09:00–23:00 醒、场景「在家待着 · 闲着」）。先去 AstrBot 里配人格。";
+        "当前没有可用人设，点「重算作息」只会得到保守默认（09:00–23:00 醒、场景「在家待着 · 闲着」）。先去 AstrBot 里配人格，或在「设置」页里选。";
     } else if (!data.schedule_auto) {
       warn.hidden = false;
       warn.textContent =
@@ -190,26 +206,202 @@ async function withButton(id, busyLabel, fn) {
   }
 }
 
-function reschedule() {
-  return withButton("reschedule", "正在重算作息（读人设 → 问模型 → 存盘）……", async () => {
-    try {
-      const data = await bridge.apiPost("reschedule", {});
-      render(data);
-      if (data.persona_set) {
-        showNotice("作息已重算。");
-      } else {
-        showNotice("已重算，但人设为空，结果是保守默认。", true);
+// ==================== 页签 ====================
+
+function switchTab(name) {
+  for (const b of document.querySelectorAll(".tab")) {
+    b.classList.toggle("active", b.dataset.tab === name);
+  }
+  for (const p of document.querySelectorAll(".tab-pane")) {
+    p.classList.toggle("active", p.id === "pane-" + name);
+  }
+}
+
+function setupTabs() {
+  const nav = $("tabs");
+  if (!nav) return;
+  nav.addEventListener("click", (e) => {
+    const btn = e.target.closest(".tab");
+    if (btn) switchTab(btn.dataset.tab);
+  });
+}
+
+// ==================== 设置 ====================
+
+function fieldEl(key, sub, sch, value, options) {
+  const wrap = document.createElement("div");
+  wrap.className = "set-field";
+
+  const name = document.createElement("div");
+  name.className = "set-name";
+  name.textContent = sch.description || key;
+  wrap.appendChild(name);
+
+  wrap.appendChild(makeControl(key, sub, sch, value, options));
+
+  if (sch.hint) {
+    const hint = document.createElement("div");
+    hint.className = "set-hint";
+    hint.textContent = sch.hint;
+    wrap.appendChild(hint);
+  }
+  return wrap;
+}
+
+function makeControl(key, sub, sch, value, options) {
+  const typ = sch.type || "string";
+  const special = sch._special;
+  let ctrl;
+  if (special === "select_persona" || special === "select_provider") {
+    ctrl = document.createElement("select");
+    const isPersona = special === "select_persona";
+    const blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = isPersona ? "（跟随 AstrBot 默认人格）" : "（用 AstrBot 默认模型）";
+    ctrl.appendChild(blank);
+    const list = (options && options[isPersona ? "persona" : "provider"]) || [];
+    for (const it of list) {
+      const op = document.createElement("option");
+      op.value = it.id;
+      op.textContent = it.name || it.id;
+      ctrl.appendChild(op);
+    }
+    const want = value === null || value === undefined ? "" : String(value);
+    ctrl.value = want;
+    if (want && ctrl.value !== want) {
+      const op = document.createElement("option");
+      op.value = want;
+      op.textContent = want + "（当前值，不在列表中）";
+      ctrl.appendChild(op);
+      ctrl.value = want;
+    }
+  } else if (typ === "bool") {
+    ctrl = document.createElement("input");
+    ctrl.type = "checkbox";
+    ctrl.checked = !!value;
+  } else if (typ === "int" || typ === "float") {
+    ctrl = document.createElement("input");
+    ctrl.type = "number";
+    ctrl.step = typ === "int" ? "1" : "0.01";
+    ctrl.value = value === null || value === undefined ? "" : String(value);
+  } else if (typ === "text") {
+    ctrl = document.createElement("textarea");
+    ctrl.rows = 3;
+    ctrl.value = value === null || value === undefined ? "" : String(value);
+  } else {
+    ctrl = document.createElement("input");
+    ctrl.type = "text";
+    ctrl.value = value === null || value === undefined ? "" : String(value);
+  }
+  ctrl.classList.add("set-input");
+  ctrl.dataset.key = key;
+  if (sub) ctrl.dataset.sub = sub;
+  return ctrl;
+}
+
+function renderSettings(payload) {
+  const box = $("settings");
+  if (!box) return;
+  const schema = (payload && payload.schema) || {};
+  const values = (payload && payload.values) || {};
+  const options = (payload && payload.options) || {};
+  const keys = Object.keys(schema);
+  box.innerHTML = "";
+  if (!keys.length) {
+    box.innerHTML = '<div class="empty">读不到配置结构（_conf_schema.json）。</div>';
+    return;
+  }
+  for (const key of keys) {
+    const sch = schema[key] || {};
+    if (sch.type === "object") {
+      const det = document.createElement("details");
+      det.className = "set-group";
+      det.open = true;
+      const sum = document.createElement("summary");
+      sum.textContent = sch.description || key;
+      det.appendChild(sum);
+      const body = document.createElement("div");
+      body.className = "set-group-body";
+      if (sch.hint) {
+        const gh = document.createElement("div");
+        gh.className = "set-hint set-group-hint";
+        gh.textContent = sch.hint;
+        body.appendChild(gh);
       }
+      const cur = values[key] && typeof values[key] === "object" ? values[key] : {};
+      for (const [sub, subsch] of Object.entries(sch.items || {})) {
+        body.appendChild(fieldEl(key, sub, subsch, cur[sub], options));
+      }
+      det.appendChild(body);
+      box.appendChild(det);
+    } else {
+      box.appendChild(fieldEl(key, "", sch, values[key], options));
+    }
+  }
+}
+
+function collectValues() {
+  const payload = {};
+  for (const ctrl of document.querySelectorAll(".set-input")) {
+    const key = ctrl.dataset.key;
+    if (!key) continue;
+    let v;
+    if (ctrl.type === "checkbox") v = ctrl.checked;
+    else if (ctrl.type === "number") v = ctrl.value === "" ? 0 : Number(ctrl.value);
+    else v = ctrl.value;
+    const sub = ctrl.dataset.sub;
+    if (sub) {
+      if (!payload[key] || typeof payload[key] !== "object") payload[key] = {};
+      payload[key][sub] = v;
+    } else {
+      payload[key] = v;
+    }
+  }
+  return payload;
+}
+
+function setSettingsResult(message, isError) {
+  const node = $("settings-result");
+  if (!node) return;
+  if (!message) {
+    node.hidden = true;
+    node.textContent = "";
+    return;
+  }
+  node.hidden = false;
+  node.classList.toggle("err", !!isError);
+  node.textContent = message;
+}
+
+async function loadSettings() {
+  const box = $("settings");
+  if (box) box.innerHTML = '<div class="empty">读取中 …</div>';
+  try {
+    const data = await bridge.apiGet("settings");
+    renderSettings(data);
+  } catch (e) {
+    if (box) box.innerHTML = `<div class="empty">读取设置失败：${esc(e.message)}</div>`;
+  }
+}
+
+function saveSettings() {
+  return withButton("save-settings", "正在保存设置 ……", async () => {
+    try {
+      const payload = collectValues();
+      const data = await bridge.apiPost("settings", payload);
+      if (data && data.status) render(data.status);
+      setSettingsResult("已保存。", false);
+      showNotice("");
+      await loadSettings();
     } catch (e) {
-      showNotice(`重算失败：${e.message}`, true);
+      setSettingsResult(`保存失败：${e.message}`, true);
+      showNotice(`保存失败：${e.message}`, true);
     }
   });
 }
 
-// 「测试发一条」会真发空间动态，需要确认。
-// 注意：插件页跑在 AstrBot 的受限 iframe 里，sandbox 不含 allow-modals，
-// window.confirm() 会被浏览器静默忽略并返回 false —— 所以这里用「页内两步确认」，
-// 第一次点变成「再点一次确认发送」，第二次点才真正发出去；8 秒不点自动还原。
+// ==================== 操作按钮 ====================
+
 const CONFIRM_LABEL = "再点一次确认发送";
 const TEST_LABEL = "测试发一条";
 let testArmed = false;
@@ -240,19 +432,26 @@ function testMoment() {
       const data = await bridge.apiPost("test-moment", {});
       render(data);
       renderTestResult(data.result);
-      showNotice(data.result?.ok ? "" : "发布未成功，看下面结果。");
+      showNotice(data.result && data.result.ok ? "" : "发布未成功，看下面结果。");
     } catch (e) {
       showNotice(`发布失败：${e.message}`, true);
     }
   });
 }
 
-function renderStickerResult(desc) {
-  const node = $("sticker-result");
-  if (!node) return;
-  node.hidden = false;
-  node.classList.remove("err");
-  node.textContent = desc;
+function reschedule() {
+  return withButton("reschedule", "正在重算作息（读人设 → 问模型 → 存盘）……", async () => {
+    try {
+      const data = await bridge.apiPost("reschedule", {});
+      render(data);
+      showNotice(
+        data.persona_set ? "作息已重算。" : "已重算，但人设为空，结果是保守默认。",
+        !data.persona_set,
+      );
+    } catch (e) {
+      showNotice(`重算失败：${e.message}`, true);
+    }
+  });
 }
 
 function stickerReload() {
@@ -260,7 +459,12 @@ function stickerReload() {
     try {
       const data = await bridge.apiPost("sticker-reload", {});
       render(data);
-      renderStickerResult(`已重扫：${data.sticker_desc ?? DASH}`);
+      const node = $("sticker-result");
+      if (node) {
+        node.hidden = false;
+        node.classList.remove("err");
+        node.textContent = `已重扫：${data.sticker_desc ?? DASH}`;
+      }
       showNotice("");
     } catch (e) {
       showNotice(`重扫失败：${e.message}`, true);
@@ -273,11 +477,18 @@ function bind() {
   $("reschedule")?.addEventListener("click", reschedule);
   $("test-moment")?.addEventListener("click", testMoment);
   $("sticker-reload")?.addEventListener("click", stickerReload);
+  $("save-settings")?.addEventListener("click", saveSettings);
+  $("reload-settings")?.addEventListener("click", () => {
+    setSettingsResult("");
+    loadSettings();
+  });
   bridge?.onContext?.(() => {
     document.title = bridge.t?.("pages.status.title", "图恒宇 · 运行状态") ?? document.title;
   });
 }
 
 bind();
+setupTabs();
 refresh();
+loadSettings();
 setInterval(refresh, 30000);
