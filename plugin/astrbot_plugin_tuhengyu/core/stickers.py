@@ -31,6 +31,10 @@ logger = logging.getLogger("astrbot")
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
 DEFAULT_LABEL = "default"
+# 上传单张上限（WebUI 上传用；对话收集另有 5MB 上限）
+MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+# 归入「其他」的系统目录（不是用户分类）
+SYSTEM_LABELS = {DEFAULT_LABEL, "collected"}
 
 
 class StickerLibrary:
@@ -41,6 +45,8 @@ class StickerLibrary:
             roots = [roots]
         self.roots = [Path(r) for r in roots]
         self._index: dict[str, list[Path]] = {}
+        # 写入目标：第一个根 = 数据目录（用户放图 / 上传落点）
+        self.primary_root = self.roots[0] if self.roots else None
         self.reload()
 
     # ---------- 扫描 ----------
@@ -80,18 +86,96 @@ class StickerLibrary:
         return {lab: list(paths) for lab, paths in self._index.items()}
 
     def groups_by_emotion(self) -> dict[str, list[tuple[str, Path]]]:
-        """按情绪类目归并各标签目录 —— 「不需要太细分」。
+        """展示用分组：按情绪 / 分类归组。
 
-        返回 {情绪类目: [(原始标签, 路径), ...]}。目录名正好是情绪名的，
-        进对应类目；其余（default / collected / 自定义名）一律进「其他」。
-        空类目不返回。顺序即 emotion.labels() 的顺序。
+        规则：
+          - 目录名是内置情绪名（开心 / 难过 / …）→ 该类目
+          - default / collected → 「其他」
+          - 其余目录名（用户在 WebUI 里自建的分类）→ 各自独立一类
+        顺序：内置情绪 →（用户分类，按名）→「其他」。空类目不返回。
         """
-        buckets: dict[str, list[tuple[str, Path]]] = {lab: [] for lab in emotion_labels()}
+        order_emo = [lab for lab in emotion_labels() if lab != EMOTION_FALLBACK]
+        out: dict[str, list[tuple[str, Path]]] = {}
+        for lab in order_emo:
+            items = [(lab, p) for p in self._index.get(lab, [])]
+            if items:
+                out[lab] = items
+        extras: dict[str, list[tuple[str, Path]]] = {}
+        others: list[tuple[str, Path]] = []
         for lab, paths in self._index.items():
-            bucket = lab if lab in buckets else EMOTION_FALLBACK
-            for p in paths:
-                buckets[bucket].append((lab, p))
-        return {lab: items for lab, items in buckets.items() if items}
+            if lab in order_emo:
+                continue
+            if lab in SYSTEM_LABELS:
+                others.extend((lab, p) for p in paths)
+            else:
+                extras[lab] = [(lab, p) for p in paths]
+        for lab in sorted(extras):
+            out[lab] = extras[lab]
+        if others:
+            out[EMOTION_FALLBACK] = others
+        return out
+
+    # ---------- 写入（WebUI：新建分类 / 上传表情包） ----------
+    @staticmethod
+    def _bad_name(name: str) -> str | None:
+        """校验分类名，返回错误说明或 None。"""
+        if not name:
+            return "分类名不能为空"
+        if len(name) > 20:
+            return "分类名太长（≤20 字）"
+        if "/" in name or "\\" in name or name.startswith("."):
+            return "分类名不能含 / \\ 或以 . 开头"
+        return None
+
+    def categories(self) -> list[str]:
+        """所有真实目录名（上传目标下拉用）。"""
+        return sorted(self._index)
+
+    def add_category(self, name: str) -> tuple[bool, str]:
+        """在数据目录下新建一个分类（子目录）。返回 (是否成功, 说明)。"""
+        name = str(name or "").strip()
+        err = self._bad_name(name)
+        if err:
+            return False, err
+        if self.primary_root is None:
+            return False, "没有可写的数据目录"
+        target = self.primary_root / name
+        try:
+            if target.exists():
+                return False, f"分类「{name}」已存在"
+            target.mkdir(parents=True, exist_ok=False)
+        except OSError as e:
+            return False, f"建目录失败：{e}"
+        self.reload()
+        return True, f"已新建分类「{name}」"
+
+    def save_image(self, category: str, filename: str, data: bytes) -> tuple[bool, str]:
+        """把一张图存进某个分类（按内容 md5 命名去重）。返回 (是否成功, 说明)。"""
+        category = str(category or "").strip()
+        err = self._bad_name(category)
+        if err:
+            return False, err
+        if not data:
+            return False, "空文件"
+        if len(data) > MAX_UPLOAD_BYTES:
+            return False, f"文件超过上限（{MAX_UPLOAD_BYTES // 1024 // 1024}MB）"
+        ext = Path(str(filename or "")).suffix.lower()
+        if ext not in IMAGE_EXTS:
+            return False, "只支持图片（png / jpg / jpeg / gif / webp / bmp）"
+        if self.primary_root is None:
+            return False, "没有可写的数据目录"
+        dest_dir = self.primary_root / category
+        try:
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            digest = hashlib.md5(data).hexdigest()[:16]
+            dest = dest_dir / f"{digest}{ext}"
+            if dest.exists():
+                return False, "这张图库里已有（按内容去重）"
+            dest.write_bytes(data)
+        except OSError as e:
+            return False, f"写入失败：{e}"
+        self.reload()
+        return True, "已添加"
 
     # ---------- 挑一张 ----------
     def pick(self, context_text: str = "", prefer_emotion: bool = True) -> Path | None:

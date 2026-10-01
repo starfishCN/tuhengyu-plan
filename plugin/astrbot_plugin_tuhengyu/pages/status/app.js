@@ -280,6 +280,7 @@ function renderStickers(data) {
   const box = $("sticker-gallery");
   if (!box) return;
   const groups = (data && data.groups) || [];
+  fillCategorySelect((data && data.categories) || []);
   const sum = $("sticker-summary");
   if (sum) {
     let s = (data && data.desc) || "无";
@@ -326,6 +327,113 @@ async function loadStickers(force) {
   } catch (e) {
     if (box) box.innerHTML = `<div class="empty">读取表情包失败：${esc(e.message)}</div>`;
   }
+}
+
+// ==================== 表情包：新建分类 / 上传 ====================
+
+function fillCategorySelect(cats) {
+  const sel = $("sticker-category");
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = "";
+  if (!cats.length) {
+    const o = document.createElement("option");
+    o.value = "";
+    o.textContent = "（还没有分类）";
+    sel.appendChild(o);
+    return;
+  }
+  for (const c of cats) {
+    const o = document.createElement("option");
+    o.value = c;
+    o.textContent = c;
+    sel.appendChild(o);
+  }
+  if (cur && cats.indexOf(cur) >= 0) sel.value = cur;
+}
+
+function setStickerResult(message, isError) {
+  const node = $("sticker-result");
+  if (!node) return;
+  if (!message) {
+    node.hidden = true;
+    node.textContent = "";
+    return;
+  }
+  node.hidden = false;
+  node.classList.toggle("err", !!isError);
+  node.textContent = message;
+}
+
+function fileToB64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const s = String(reader.result || "");
+      resolve(s.slice(s.indexOf(",") + 1));
+    };
+    reader.onerror = () => reject(new Error("读取文件失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function addCategory() {
+  const inp = $("sticker-newcat");
+  const name = inp && inp.value ? inp.value.trim() : "";
+  if (!name) {
+    setStickerResult("请先填分类名。", true);
+    return;
+  }
+  const btn = $("sticker-addcat");
+  if (btn) btn.disabled = true;
+  try {
+    const d = await bridge.apiPost("sticker-category", { name: name });
+    setStickerResult((d && d.message) || "已新建分类。", false);
+    if (inp) inp.value = "";
+    stickersLoaded = false;
+    await loadStickers(true);
+  } catch (e) {
+    setStickerResult("新建失败：" + e.message, true);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function uploadFiles(files) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+  const sel = $("sticker-category");
+  const cat = sel ? sel.value : "";
+  if (!cat) {
+    setStickerResult("没有可选的分类，先新建一个。", true);
+    return;
+  }
+  const btn = $("sticker-upload");
+  if (btn) btn.disabled = true;
+  let ok = 0;
+  let fail = 0;
+  let lastErr = "";
+  for (const f of list) {
+    try {
+      const b64 = await fileToB64(f);
+      await bridge.apiPost("sticker-upload", {
+        category: cat,
+        filename: f.name,
+        data: b64,
+      });
+      ok += 1;
+    } catch (e) {
+      fail += 1;
+      lastErr = e.message;
+    }
+  }
+  setStickerResult(
+    `上传完成：成功 ${ok}，失败 ${fail}${lastErr ? "（" + lastErr + "）" : ""}`,
+    fail > 0,
+  );
+  stickersLoaded = false;
+  await loadStickers(true);
+  if (btn) btn.disabled = false;
 }
 
 // ==================== 设置 ====================
@@ -581,6 +689,13 @@ function bind() {
   $("test-moment")?.addEventListener("click", testMoment);
   $("sticker-reload")?.addEventListener("click", stickerReload);
   $("sticker-refresh")?.addEventListener("click", () => loadStickers(true));
+  $("sticker-addcat")?.addEventListener("click", addCategory);
+  $("sticker-upload")?.addEventListener("click", () => $("sticker-file")?.click());
+  $("sticker-file")?.addEventListener("change", (e) => {
+    const arr = Array.from(e.target.files || []);
+    e.target.value = "";
+    uploadFiles(arr);
+  });
   $("save-settings")?.addEventListener("click", saveSettings);
   $("reload-settings")?.addEventListener("click", () => {
     setSettingsResult("");

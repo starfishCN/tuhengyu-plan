@@ -160,14 +160,23 @@
         <section class="panel">
           <h2>表情包库</h2>
           <p class="set-tip">
-            按情绪分类，类目固定：<code>开心 / 难过 / 生气 / 惊讶 / 无语 / 害羞</code>。
-            子目录名就是情绪，例：<code>stickers/开心/a.png</code>；放不进这些目录的（含散图、对话里收到的图）归「其他」。
-            bot 回复时按这条回复的情绪，从同名目录里挑图。
+            按分类展示，例：<code>stickers/开心/a.png</code>。内置情绪类：<code>开心 / 难过 / 生气 / 惊讶 / 无语 / 害羞</code>；
+            也可在下面新建自定义分类。散图与对话里收到的图归「其他」。bot 回复时按这条回复的情绪，从同名目录里挑图。
           </p>
           <div class="sticker-bar">
             <span id="sticker-summary" class="card-hint">读取中 …</span>
             <button id="sticker-refresh" class="btn btn-ghost" type="button">刷新</button>
           </div>
+          <div class="sticker-tools">
+            <label class="sticker-label">上传到
+              <select id="sticker-category" class="set-input"></select>
+            </label>
+            <input id="sticker-newcat" class="set-input" type="text" placeholder="新分类名" maxlength="20" />
+            <button id="sticker-addcat" class="btn btn-ghost" type="button">新建分类</button>
+            <button id="sticker-upload" class="btn" type="button">上传图片</button>
+            <input id="sticker-file" type="file" accept="image/*" multiple hidden />
+          </div>
+          <div id="sticker-result" class="action-result" hidden></div>
           <div id="sticker-gallery" class="gallery">
             <div class="empty">读取中 …</div>
           </div>

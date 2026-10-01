@@ -483,6 +483,24 @@ select.set-input {
   margin: 0;
 }
 
+.sticker-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.sticker-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.sticker-tools .set-input {
+  width: auto;
+  min-width: 120px;
+}
+
 .gallery-group {
   margin-bottom: 16px;
 }

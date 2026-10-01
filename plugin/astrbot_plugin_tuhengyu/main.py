@@ -65,7 +65,19 @@ class TuhengyuPlugin(Star):
                 f"/{PLUGIN_NAME}/stickers",
                 self.page_stickers,
                 ["GET"],
-                "插件页面：表情包库（按标签分组）",
+                "插件页面：表情包库（按情绪分组）",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/sticker-category",
+                self.page_sticker_category,
+                ["POST"],
+                "插件页面：新建表情包分类",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/sticker-upload",
+                self.page_sticker_upload,
+                ["POST"],
+                "插件页面：上传表情包",
             )
             context.register_web_api(
                 f"/{PLUGIN_NAME}/settings",
@@ -406,12 +418,55 @@ class TuhengyuPlugin(Star):
         return json_response(
             {
                 "groups": out,
+                "categories": lib.categories(),
                 "desc": lib.describe(),
                 "total_bytes": total,
                 "truncated": truncated,
                 "max_item": max_item,
             }
         )
+
+    async def page_sticker_category(self):
+        """POST /astrbot_plugin_tuhengyu/sticker-category —— 新建一个表情包分类（子目录）。"""
+        if self._scheduler is None:
+            return error_response("调度器未运行（插件可能被禁用）", status_code=409)
+        try:
+            body = await web_request.json({})
+        except Exception:
+            body = {}
+        name = str((body or {}).get("name", "")).strip()
+        ok, msg = self._scheduler.stickers.add_category(name)
+        if not ok:
+            return error_response(msg, status_code=400)
+        data = self._scheduler.status_dict()
+        data["running"] = True
+        data["message"] = msg
+        return json_response(data)
+
+    async def page_sticker_upload(self):
+        """POST /astrbot_plugin_tuhengyu/sticker-upload —— 上传一张图到指定分类（base64）。"""
+        if self._scheduler is None:
+            return error_response("调度器未运行（插件可能被禁用）", status_code=409)
+        try:
+            body = await web_request.json({})
+        except Exception:
+            body = {}
+        import base64
+
+        category = str((body or {}).get("category", "")).strip()
+        filename = str((body or {}).get("filename", "")).strip()
+        raw = (body or {}).get("data", "")
+        try:
+            data_bytes = base64.b64decode(raw) if raw else b""
+        except Exception:
+            data_bytes = b""
+        ok, msg = self._scheduler.stickers.save_image(category, filename, data_bytes)
+        if not ok:
+            return error_response(msg, status_code=400)
+        out = self._scheduler.status_dict()
+        out["running"] = True
+        out["message"] = msg
+        return json_response(out)
 
     # ---------- 插件页面：设置读写 ----------
     def _load_schema(self) -> dict:
