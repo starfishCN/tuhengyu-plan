@@ -13,7 +13,6 @@
         <div class="head-right">
           <span id="clock" class="clock">—</span>
           <button id="refresh" class="btn btn-ghost" type="button">刷新</button>
-          <button id="reschedule" class="btn" type="button">重算作息</button>
         </div>
       </header>
 
@@ -27,6 +26,7 @@
         <div class="hero-sub">
           <span>作息来源：<b id="source">—</b></span>
           <span id="schedule-desc">—</span>
+          <span id="persona-state">—</span>
         </div>
       </section>
 
@@ -50,6 +50,38 @@
           <div class="card-label">上次发空间</div>
           <div id="last-moment" class="card-value">—</div>
           <div class="card-hint">重启后重置（内存态）</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>操作</h2>
+
+        <div class="action">
+          <div class="action-main">
+            <button id="reschedule" class="btn" type="button">重算作息</button>
+            <div class="action-text">
+              <div class="action-title">换人设后按这个</div>
+              <div class="action-desc">
+                丢弃盘上已有的作息，重新读 <code>persona_prompt</code>，让模型按新的人设生成一份一天的作息。
+                作息只在生成时读人设，改完人设不按这里不会生效。
+              </div>
+              <div id="reschedule-warn" class="action-warn" hidden></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="action">
+          <div class="action-main">
+            <button id="test-moment" class="btn btn-warn" type="button">测试发一条</button>
+            <div class="action-text">
+              <div class="action-title">立刻发一条 QQ 空间动态（调试用）</div>
+              <div class="action-desc">
+                等同 QQ 里的 <code>/图恒宇测试</code>：用当前作息生成一条内容并发出去。
+                <b>会产生真实的空间动态</b>，不要频繁点。
+              </div>
+              <div id="test-result" class="action-result" hidden></div>
+            </div>
+          </div>
         </div>
       </section>
 

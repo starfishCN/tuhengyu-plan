@@ -171,6 +171,8 @@ class LifeScheduler:
         st = self.schedule.state_at(now)
         sch = _section(self.config, "scheduler")
         moment = _section(self.config, "moment")
+        sched = _section(self.config, "schedule")
+        persona = str(self.config.get("persona_prompt", "")).strip()
         base = float(sch.get("act_probability", 0.15))
         bias_on = bool(sch.get("state_bias", True))
         factor = state_bias(st, self.config) if bias_on else 1.0
@@ -183,6 +185,9 @@ class LifeScheduler:
             "source": st.source,
             "schedule_desc": self.schedule.describe(),
             "periods": self.schedule.periods(),
+            "persona_set": bool(persona),
+            "schedule_auto": bool(sched.get("auto_generate", True)),
+            "manual_hours": sched.get("manual_hours", ""),
             "check_interval_minutes": sch.get("check_interval_minutes", 30),
             "act_probability": base,
             "state_bias_on": bias_on,

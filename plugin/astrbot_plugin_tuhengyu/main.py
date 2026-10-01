@@ -44,6 +44,12 @@ class TuhengyuPlugin(Star):
                 ["POST"],
                 "插件页面：重算作息",
             )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/test-moment",
+                self.page_test_moment,
+                ["POST"],
+                "插件页面：立即发一条空间动态",
+            )
         except Exception as e:  # 注册失败不影响主体功能
             self.logger.warning(f"[图恒宇] 注册页面 API 失败：{e}")
 
@@ -78,6 +84,27 @@ class TuhengyuPlugin(Star):
         self.logger.info("[图恒宇] 生活调度器已停止。")
 
     # ---------- 命令 ----------
+    async def _publish_once(self) -> dict:
+        """生成并发布一条空间动态。命令与插件页面共用同一条路径。"""
+        if self._scheduler is None:
+            return {"ok": False, "message": "调度器未运行（插件可能被禁用）。"}
+        from .core.llm import generate_moment_text
+
+        st = self._scheduler.schedule.state_at()
+        content = await generate_moment_text(self.context, self.config, st.now_line())
+        if not content:
+            return {"ok": False, "message": "内容生成失败：没有可用模型，看日志。", "state": st.brief()}
+        ok = await self._scheduler._post_moment(content)
+        if ok:
+            self._scheduler._last_moment = datetime.now()
+            return {"ok": True, "message": "已发布", "content": content, "state": st.brief()}
+        return {
+            "ok": False,
+            "message": "发布失败，看 AstrBot 日志里的 [图恒宇] 行。",
+            "content": content,
+            "state": st.brief(),
+        }
+
     @filter.command("图恒宇")
     async def status(self, event: AstrMessageEvent):
         """查看插件状态。"""
@@ -94,19 +121,13 @@ class TuhengyuPlugin(Star):
             return
         yield event.plain_result("[图恒宇] 正在生成并发布，稍等 ...")
         try:
-            from .core.llm import generate_moment_text
-
-            st = self._scheduler.schedule.state_at()
-            content = await generate_moment_text(self.context, self.config, st.now_line())
-            if not content:
-                yield event.plain_result("[图恒宇] 内容生成失败：没有可用模型，看日志。")
-                return
-            ok = await self._scheduler._post_moment(content)
-            if ok:
-                self._scheduler._last_moment = datetime.now()
-                yield event.plain_result(f"[图恒宇] 已发布（此刻：{st.brief()}）：{content}")
-            else:
+            r = await self._publish_once()
+            if r.get("ok"):
+                yield event.plain_result(f"[图恒宇] 已发布（此刻：{r.get('state')}）：{r.get('content')}")
+            elif r.get("content"):
                 yield event.plain_result("[图恒宇] 发布失败，看 AstrBot 日志里的 [图恒宇] 行。")
+            else:
+                yield event.plain_result(f"[图恒宇] {r.get('message')}")
         except Exception as e:
             yield event.plain_result(f"[图恒宇] 出错：{e}")
 
@@ -129,4 +150,17 @@ class TuhengyuPlugin(Star):
             return error_response(f"重算失败：{e}", status_code=500)
         data = self._scheduler.status_dict()
         data["running"] = True
+        return json_response(data)
+
+    async def page_test_moment(self):
+        """POST /astrbot_plugin_tuhengyu/test-moment —— 立即发一条（等同 /图恒宇测试）。"""
+        if self._scheduler is None:
+            return error_response("调度器未运行（插件可能被禁用）", status_code=409)
+        try:
+            result = await self._publish_once()
+        except Exception as e:
+            return error_response(f"发布出错：{e}", status_code=500)
+        data = self._scheduler.status_dict()
+        data["running"] = True
+        data["result"] = result
         return json_response(data)

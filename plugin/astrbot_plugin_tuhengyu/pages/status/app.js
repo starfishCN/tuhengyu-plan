@@ -1,6 +1,8 @@
 // 图恒宇 · 运行状态页面
 // 通过 AstrBot 注入的 window.AstrBotPluginPage bridge 与插件后端通信。
-// apiGet("status") -> /api/v1/plugins/extensions/astrbot_plugin_tuhengyu/status
+//   apiGet("status")        -> /api/v1/plugins/extensions/astrbot_plugin_tuhengyu/status
+//   apiPost("reschedule")   -> …/reschedule
+//   apiPost("test-moment")  -> …/test-moment
 
 const bridge = window.AstrBotPluginPage;
 
@@ -70,8 +72,11 @@ function renderPeriods(periods) {
 function render(data) {
   if (!data || data.running === false) {
     text("scene", "调度器未运行");
-    text("awake", "");
-    $("awake")?.classList.remove("on");
+    const awake = $("awake");
+    if (awake) {
+      awake.textContent = DASH;
+      awake.classList.remove("on");
+    }
     showNotice("插件可能被禁用，或尚未加载完成。", true);
     return;
   }
@@ -87,22 +92,61 @@ function render(data) {
   text("schedule-desc", data.schedule_desc ?? DASH);
   text("clock", data.now ?? DASH);
 
-  const prob = Number(data.effective_probability);
-  text("prob", Number.isFinite(prob) ? `${(prob * 100).toFixed(1)}%` : DASH);
-  if (data.state_bias_on) {
-    text("prob-detail", `基准 ${data.act_probability} × 状态 ${data.bias_factor}`);
+  // 人设 / 作息模式：决定「重算作息」按钮会得到什么
+  if (data.persona_set) {
+    text("persona-state", "人设已填");
   } else {
-    text("prob-detail", `基准 ${data.act_probability}（状态加权已关）`);
+    text("persona-state", "人设未填");
+  }
+  const warn = $("reschedule-warn");
+  if (warn) {
+    if (!data.persona_set) {
+      warn.hidden = false;
+      warn.textContent =
+        "当前 persona_prompt 为空，点「重算作息」只会得到保守默认（09:00–23:00 醒、场景「在家待着 · 闲着」）。先去插件配置里填人设。";
+    } else if (!data.schedule_auto) {
+      warn.hidden = false;
+      warn.textContent =
+        "schedule.auto_generate 已关，作息走手填 manual_hours，点「重算作息」不会让模型生成。";
+    } else {
+      warn.hidden = true;
+      warn.textContent = "";
+    }
   }
 
-  text("interval", `${data.check_interval_minutes ?? DASH} 分钟`);
+  const prob = Number(data.effective_probability);
+  text("prob", Number.isFinite(prob) ? `${(prob * 100).toFixed(1)}%` : DASH);
+  text(
+    "prob-detail",
+    data.state_bias_on
+      ? `基准 ${data.act_probability} × 状态 ${data.bias_factor}`
+      : `基准 ${data.act_probability}（状态加权已关）`,
+  );
 
+  text("interval", `${data.check_interval_minutes ?? DASH} 分钟`);
   text("moment", data.moment_enabled ? "开" : "关");
   text("moment-detail", `最短间隔 ${data.moment_min_interval_hours ?? DASH} 小时`);
-
   text("last-moment", data.last_moment ?? "无");
 
   renderPeriods(data.periods);
+}
+
+function renderTestResult(result) {
+  const node = $("test-result");
+  if (!node) return;
+  if (!result) {
+    node.hidden = true;
+    return;
+  }
+  node.hidden = false;
+  node.classList.toggle("err", !result.ok);
+  if (result.ok) {
+    node.textContent = `已发布（此刻：${result.state ?? DASH}）：${result.content ?? ""}`;
+  } else if (result.content) {
+    node.textContent = `生成成功但发布失败：${result.message ?? ""}（内容：${result.content}）`;
+  } else {
+    node.textContent = result.message || "发布失败。";
+  }
 }
 
 async function refresh() {
@@ -114,25 +158,52 @@ async function refresh() {
   }
 }
 
-async function reschedule() {
-  const btn = $("reschedule");
+async function withButton(id, busyLabel, fn) {
+  const btn = $(id);
   if (btn) btn.disabled = true;
-  showNotice("正在重算作息 ……");
+  showNotice(busyLabel);
   try {
-    const data = await bridge.apiPost("reschedule", {});
-    render(data);
-    showNotice("作息已重算。");
-  } catch (e) {
-    showNotice(`重算失败：${e.message}`, true);
+    await fn();
   } finally {
     if (btn) btn.disabled = false;
   }
 }
 
+function reschedule() {
+  return withButton("reschedule", "正在重算作息（读人设 → 问模型 → 存盘）……", async () => {
+    try {
+      const data = await bridge.apiPost("reschedule", {});
+      render(data);
+      if (data.persona_set) {
+        showNotice("作息已重算。");
+      } else {
+        showNotice("已重算，但人设为空，结果是保守默认。", true);
+      }
+    } catch (e) {
+      showNotice(`重算失败：${e.message}`, true);
+    }
+  });
+}
+
+function testMoment() {
+  const ok = window.confirm("这会真的往 QQ 空间发一条动态。确定要继续吗？");
+  if (!ok) return;
+  return withButton("test-moment", "正在生成并发布，稍等……", async () => {
+    try {
+      const data = await bridge.apiPost("test-moment", {});
+      render(data);
+      renderTestResult(data.result);
+      showNotice(data.result?.ok ? "" : "发布未成功，看下面结果。");
+    } catch (e) {
+      showNotice(`发布失败：${e.message}`, true);
+    }
+  });
+}
+
 function bind() {
   $("refresh")?.addEventListener("click", refresh);
   $("reschedule")?.addEventListener("click", reschedule);
-  // 响应 WebUI 语言切换，保持标题一致。
+  $("test-moment")?.addEventListener("click", testMoment);
   bridge.onContext?.(() => {
     document.title = bridge.t?.("pages.status.title", "图恒宇 · 运行状态") ?? document.title;
   });
@@ -140,5 +211,4 @@ function bind() {
 
 bind();
 refresh();
-// 每 30 秒自动刷新一次时钟与状态。
 setInterval(refresh, 30000);

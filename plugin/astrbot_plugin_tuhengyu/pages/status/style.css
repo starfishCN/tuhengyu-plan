@@ -220,3 +220,86 @@ body {
   color: var(--accent);
   font-weight: 600;
 }
+
+/* ---------- 操作面板 ---------- */
+
+.action {
+  border-top: 1px solid var(--line);
+  padding: 12px 0;
+}
+
+.action:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.action:last-of-type {
+  padding-bottom: 4px;
+}
+
+.action-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.action-main .btn {
+  flex: 0 0 auto;
+  min-width: 96px;
+}
+
+.action-text {
+  flex: 1 1 260px;
+  min-width: 220px;
+}
+
+.action-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.action-desc {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.action-desc code {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+.action-warn {
+  margin-top: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  color: var(--warn);
+  font-size: 12.5px;
+}
+
+.action-result {
+  margin-top: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--ok);
+  border-radius: 8px;
+  color: var(--fg);
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.action-result.err {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.btn-warn {
+  background: transparent;
+  color: var(--warn);
+  border-color: var(--warn);
+}

@@ -3,7 +3,7 @@
 给 bot「完整的一生」。第一版：**作息 + 调度器 + 发 QQ 空间**。
 
 - 包名：`astrbot_plugin_tuhengyu`
-- 版本：0.2.3
+- 版本：0.2.4
 - 支持平台：`aiocqhttp`（OneBot v11）
 - 许可：待定（见项目 README）
 
@@ -38,7 +38,7 @@ docker restart astrbot
 启动成功的话，日志里会出现：
 
 ```
-Plugin astrbot_plugin_tuhengyu (0.2.3) by starfishCN
+Plugin astrbot_plugin_tuhengyu (0.2.4) by starfishCN
 [图恒宇] 生活调度器已启动。
 ```
 
@@ -53,18 +53,24 @@ Plugin astrbot_plugin_tuhengyu (0.2.3) by starfishCN
 
 在 WebUI 的插件详情页里有一页「运行状态」（`pages/status/`），不用敲命令就能看：
 
-- 此刻状态（scene · state）、醒着/睡着、作息来源与段数
+- 此刻状态（scene · state）、醒着/睡着、作息来源与段数、人设是否已填
 - 触发概率：基准 × 状态倍数 → 生效值
 - 检查间隔、发空间开关与最短间隔、上次发空间时间
 - 作息时段表（当前命中的那一行高亮）
-- 按钮：**刷新**、**重算作息**（丢掉盘上作息重新生成）
+- **操作面板**：
+  - **重算作息** —— *换人设后按这个*。丢弃盘上作息，重新读 `persona_prompt` 让模型生成一份。
+    ⚠️ 作息只在生成时读人设，改完人设不按它不会生效（重启插件也行，但会重来一遍）。
+    人设为空时只会得到保守默认，页面会直接提示。
+  - **测试发一条** —— 等同 QQ 里的 `/图恒宇测试`，立即生成并发布一条空间动态。
+    **会产生真实动态**，点击前有确认框。
 
 页面的后端 API 由插件自己注册（路由带插件名前缀）：
 
 | 方法 | 路由 | 作用 |
 |---|---|---|
-| GET | `/astrbot_plugin_tuhengyu/status` | 结构化运行状态 |
-| POST | `/astrbot_plugin_tuhengyu/reschedule` | 丢弃旧作息并重新生成 |
+| GET | `/astrbot_plugin_tuhengyu/status` | 结构化运行状态（含 `persona_set` / `schedule_auto`） |
+| POST | `/astrbot_plugin_tuhengyu/reschedule` | 丢弃旧作息并按人设重新生成 |
+| POST | `/astrbot_plugin_tuhengyu/test-moment` | 立即生成并发布一条（返回 `result`） |
 
 页面里的相对 endpoint（`status` / `reschedule`）会被 bridge 拼成
 `/api/v1/plugins/extensions/astrbot_plugin_tuhengyu/<endpoint>`。
