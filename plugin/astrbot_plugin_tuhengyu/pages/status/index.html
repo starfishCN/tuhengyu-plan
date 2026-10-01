@@ -52,6 +52,11 @@
           <div id="last-moment" class="card-value">—</div>
           <div class="card-hint">重启后重置（内存态）</div>
         </div>
+        <div class="card">
+          <div class="card-label">表情包</div>
+          <div id="sticker" class="card-value">—</div>
+          <div id="sticker-detail" class="card-hint">—</div>
+        </div>
       </section>
 
       <section class="panel">
@@ -82,6 +87,20 @@
                 <b>会产生真实的空间动态</b>，不要频繁点。
               </div>
               <div id="test-result" class="action-result" hidden></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="action">
+          <div class="action-main">
+            <button id="sticker-reload" class="btn btn-ghost" type="button">重扫表情包</button>
+            <div class="action-text">
+              <div class="action-title">放完表情包后按这个</div>
+              <div class="action-desc">
+                重新扫描表情包目录。把图放进插件数据目录的 <code>stickers/</code>（子目录名就是标签）后，
+                按一下即可生效，不必重载插件。
+              </div>
+              <div id="sticker-result" class="action-result" hidden></div>
             </div>
           </div>
         </div>

@@ -19,6 +19,7 @@ from .llm import generate_moment_text
 from .onebot import OneBotBridge
 from .qzone import QzoneClient
 from .schedule import Schedule
+from .stickers import StickerLibrary
 
 logger = logging.getLogger("astrbot")
 
@@ -85,6 +86,8 @@ class LifeScheduler:
         self._last_moment = None  # datetime of last posted moment
         self.bridge = OneBotBridge(context)
         self._qzone = QzoneClient(self.bridge)
+        # 表情包库：插件内置 assets/stickers/ + 数据目录 stickers/（用户放图处）
+        self.stickers = StickerLibrary(self._sticker_roots(data_dir))
         # 人设：由 main.py 从 AstrBot 人格解析后注入（插件不再自带一份正文）。
         self.persona_text = ""
         self.persona_label = ""
@@ -96,6 +99,23 @@ class LifeScheduler:
         self.persona_label = str(label or "").strip()
         self.persona_name = str(name or "").strip()
         self.schedule.set_persona(self.persona_text)
+
+    # ---------- 表情包 ----------
+    @staticmethod
+    def _sticker_roots(data_dir: str) -> list:
+        """表情包目录：数据目录优先（用户放图处），另含插件内置目录。"""
+        from pathlib import Path
+
+        plugin_root = Path(__file__).resolve().parent.parent
+        return [Path(data_dir) / "stickers", plugin_root / "assets" / "stickers"]
+
+    def pick_sticker(self, context_text: str = ""):
+        """按文本挑一张表情包；库为空或出错返回 None。"""
+        try:
+            return self.stickers.pick(context_text)
+        except Exception as e:
+            logger.warning(f"[图恒宇] 挑表情包失败：{e}")
+            return None
 
     # ---------- 启动 ----------
     async def setup(self) -> None:
@@ -212,6 +232,9 @@ class LifeScheduler:
             "moment_enabled": bool(moment.get("enabled", True)),
             "moment_min_interval_hours": moment.get("min_interval_hours", 6),
             "last_moment": self._last_moment.strftime("%Y-%m-%d %H:%M:%S") if self._last_moment else None,
+            "sticker_enabled": bool(_section(self.config, "sticker").get("enabled", True)),
+            "sticker_probability": _section(self.config, "sticker").get("probability", 0.35),
+            "sticker_desc": self.stickers.describe(),
         }
 
     # ---------- 对外：状态文本 ----------
@@ -238,5 +261,9 @@ class LifeScheduler:
                 f"（最短间隔 {moment.get('min_interval_hours', 6)} 小时）"
             ),
             f"上次发空间：{self._last_moment or '无'}",
+            (
+                f"表情包：{'开' if _section(self.config, 'sticker').get('enabled', True) else '关'}"
+                f"（{self.stickers.describe()}）"
+            ),
         ]
         return "\n".join(lines)

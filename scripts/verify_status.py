@@ -37,4 +37,4 @@ candidates = [
 ]
 for path in candidates:
     st, bd = req(path, token=tok)
-    print("GET", path, st, bd[:600])
+    print("GET", path, st, bd[:4000])

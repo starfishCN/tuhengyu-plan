@@ -1,0 +1,98 @@
+"""表情包：按标签挑一张图 —— 不接 embedding，不接向量库。
+
+约定（目录即标签）：
+    assets/stickers/<标签>/xxx.png     → 标签 = 子目录名
+    assets/stickers/xxx.png            → 标签 = default（散图）
+
+选图优先级：
+    ① 传入文本（此刻的作息场景/心情 + 本条回复正文）里出现某标签名 → 该标签随机一张
+    ② 否则用 default 标签（散图）
+    ③ 再否则从全部里随机
+    ④ 一张图都没有 → None
+
+“匹配”就是子串命中，确定性、零成本。标签命名尽量用词面直白的词
+（开心 / 困 / 无语 / 摸鱼…），命中率就高。要更聪明可在上层加一次
+模型选标签，但默认不做 —— 保持零 token。
+"""
+from __future__ import annotations
+
+import logging
+import random
+from pathlib import Path
+
+logger = logging.getLogger("astrbot")
+
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+DEFAULT_LABEL = "default"
+
+
+class StickerLibrary:
+    """本地表情包库。只做「扫目录 + 挑一张」。"""
+
+    def __init__(self, roots):
+        if isinstance(roots, (str, Path)):
+            roots = [roots]
+        self.roots = [Path(r) for r in roots]
+        self._index: dict[str, list[Path]] = {}
+        self.reload()
+
+    # ---------- 扫描 ----------
+    def reload(self) -> None:
+        """重新扫描目录。新增/删除表情包后可调（或重载插件）。"""
+        index: dict[str, list[Path]] = {}
+        for root in self.roots:
+            if not root.is_dir():
+                continue
+            for p in root.rglob("*"):
+                if not p.is_file() or p.suffix.lower() not in IMAGE_EXTS:
+                    continue
+                rel = p.relative_to(root)
+                label = rel.parts[0] if len(rel.parts) > 1 else DEFAULT_LABEL
+                index.setdefault(label, []).append(p)
+        self._index = index
+
+    # ---------- 查询 ----------
+    def has_any(self) -> bool:
+        return bool(self._index)
+
+    def count(self) -> int:
+        return sum(len(v) for v in self._index.values())
+
+    def labels(self) -> list[str]:
+        return sorted(self._index)
+
+    def describe(self) -> str:
+        """给状态页用的一行摘要。"""
+        if not self._index:
+            return "无（把图放进 stickers/ 即可）"
+        parts = [f"{lab}×{len(self._index[lab])}" for lab in self.labels()]
+        return f"共 {self.count()} 张 · " + " / ".join(parts)
+
+    # ---------- 挑一张 ----------
+    def pick(self, context_text: str = "") -> Path | None:
+        """按传入文本挑一张。文本为空则退到 default / 全部随机。"""
+        if not self._index:
+            return None
+        text = str(context_text or "").lower()
+        # ① 标签名出现在文本里（default 不参与这一层）
+        hit = [lab for lab in self._index if lab != DEFAULT_LABEL and lab.lower() in text]
+        if hit:
+            return random.choice(self._index[random.choice(hit)])
+        # ② default（散图）
+        if DEFAULT_LABEL in self._index:
+            return random.choice(self._index[DEFAULT_LABEL])
+        # ③ 全部随机
+        everything = [p for paths in self._index.values() for p in paths]
+        return random.choice(everything) if everything else None
+
+
+def read_base64(path: Path) -> str | None:
+    """读成 base64 字符串，供跨容器发送（SnowLuma 与 AstrBot 不共享文件系统）。"""
+    try:
+        import base64
+
+        return base64.b64encode(path.read_bytes()).decode()
+    except OSError as e:
+        logger.warning(f"[图恒宇] 读表情包失败：{e}")
+        return None
+        return None

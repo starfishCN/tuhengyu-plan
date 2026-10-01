@@ -12,6 +12,7 @@
     - 平台访问：context.get_platform("aiocqhttp") → platform.get_client() → bot.call_action()
 """
 import asyncio
+import random
 from datetime import datetime
 
 from astrbot.api.event import filter, AstrMessageEvent
@@ -20,6 +21,7 @@ from astrbot.api.web import error_response, json_response
 
 from .core.persona import resolve_persona
 from .core.scheduler import LifeScheduler
+from .core.stickers import read_base64
 
 # Web API 路由必须以插件名为前缀（AstrBot 约定，2026-10-01 核对官方文档）。
 PLUGIN_NAME = "astrbot_plugin_tuhengyu"
@@ -50,6 +52,12 @@ class TuhengyuPlugin(Star):
                 self.page_test_moment,
                 ["POST"],
                 "插件页面：立即发一条空间动态",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/sticker-reload",
+                self.page_sticker_reload,
+                ["POST"],
+                "插件页面：重扫表情包目录",
             )
         except Exception as e:  # 注册失败不影响主体功能
             self.logger.warning(f"[图恒宇] 注册页面 API 失败：{e}")
@@ -99,6 +107,44 @@ class TuhengyuPlugin(Star):
             self._task.cancel()
             self._task = None
         self.logger.info("[图恒宇] 生活调度器已停止。")
+
+    # ---------- 回复附带表情包 ----------
+    @filter.on_decorating_result()
+    async def attach_sticker(self, event: AstrMessageEvent):
+        """bot 每次回复发出前，按概率在消息末尾附一张表情包。
+
+        被动附带，不主动发消息；库为空时什么都不做。
+        选图见 core/stickers.py：按「此刻状态 + 本条回复正文」里的标签名挑。
+        """
+        if self._scheduler is None:
+            return
+        sec = self.config.get("sticker") if isinstance(self.config, dict) else None
+        sec = sec if isinstance(sec, dict) else {}
+        if not sec.get("enabled", True):
+            return
+        try:
+            prob = float(sec.get("probability", 0.35))
+        except (TypeError, ValueError):
+            prob = 0.35
+        if prob <= 0 or random.random() > prob:
+            return
+        result = event.get_result()
+        if result is None or not getattr(result, "chain", None):
+            return
+        try:
+            reply_text = result.get_plain_text()
+        except Exception:
+            reply_text = ""
+        st = self._scheduler.schedule.state_at()
+        path = self._scheduler.pick_sticker(f"{st.scene}{st.state}{reply_text}")
+        if path is None:
+            return
+        b64 = read_base64(path)
+        if not b64:
+            return
+        from astrbot.api.message_components import Image
+
+        result.chain.append(Image.fromBase64(b64))
 
     # ---------- 命令 ----------
     async def _publish_once(self) -> dict:
@@ -187,4 +233,16 @@ class TuhengyuPlugin(Star):
         data = self._scheduler.status_dict()
         data["running"] = True
         data["result"] = result
+
+    async def page_sticker_reload(self):
+        """POST /astrbot_plugin_tuhengyu/sticker-reload —— 重扫表情包目录。"""
+        if self._scheduler is None:
+            return error_response("调度器未运行（插件可能被禁用）", status_code=409)
+        try:
+            self._scheduler.stickers.reload()
+        except Exception as e:
+            return error_response(f"重扫失败：{e}", status_code=500)
+        data = self._scheduler.status_dict()
+        data["running"] = True
+        return json_response(data)
         return json_response(data)

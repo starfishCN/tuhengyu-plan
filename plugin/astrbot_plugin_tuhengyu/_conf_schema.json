@@ -177,5 +177,24 @@
         "default": ""
       }
     }
+  },
+  "sticker": {
+    "type": "object",
+    "description": "[表情包] 回复时随机附一张图",
+    "hint": "把图放进插件数据目录的 stickers/ 里，子目录名就是标签（例：stickers/开心/a.png）。不接向量库、不烧 token：按「标签名是否出现在本条对话内容 / 此刻状态里」挑图；没有命中就发 default 里的散图。",
+    "items": {
+      "enabled": {
+        "type": "bool",
+        "description": "启用表情包附带",
+        "hint": "开启后，bot 每次回复有概率在末尾带一张表情包。库为空时什么都不做。",
+        "default": true
+      },
+      "probability": {
+        "type": "float",
+        "description": "每条回复附带表情包的概率（0-1）",
+        "hint": "默认 0.35。调太高会每条都发图，像刷屏。",
+        "default": 0.35
+      }
+    }
   }
 }

@@ -142,6 +142,13 @@ function render(data) {
   text("moment-detail", `最短间隔 ${data.moment_min_interval_hours ?? DASH} 小时`);
   text("last-moment", data.last_moment ?? "无");
 
+  text("sticker", data.sticker_enabled ? "开" : "关");
+  const sp = Number(data.sticker_probability);
+  text(
+    "sticker-detail",
+    `${data.sticker_desc ?? DASH}（每条 ${Number.isFinite(sp) ? (sp * 100).toFixed(0) : DASH}%）`,
+  );
+
   renderPeriods(data.periods);
 }
 
@@ -240,10 +247,32 @@ function testMoment() {
   });
 }
 
+function renderStickerResult(desc) {
+  const node = $("sticker-result");
+  if (!node) return;
+  node.hidden = false;
+  node.classList.remove("err");
+  node.textContent = desc;
+}
+
+function stickerReload() {
+  return withButton("sticker-reload", "正在重扫表情包目录……", async () => {
+    try {
+      const data = await bridge.apiPost("sticker-reload", {});
+      render(data);
+      renderStickerResult(`已重扫：${data.sticker_desc ?? DASH}`);
+      showNotice("");
+    } catch (e) {
+      showNotice(`重扫失败：${e.message}`, true);
+    }
+  });
+}
+
 function bind() {
   $("refresh")?.addEventListener("click", refresh);
   $("reschedule")?.addEventListener("click", reschedule);
   $("test-moment")?.addEventListener("click", testMoment);
+  $("sticker-reload")?.addEventListener("click", stickerReload);
   bridge?.onContext?.(() => {
     document.title = bridge.t?.("pages.status.title", "图恒宇 · 运行状态") ?? document.title;
   });
