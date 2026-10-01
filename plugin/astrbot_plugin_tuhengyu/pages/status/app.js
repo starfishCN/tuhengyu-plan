@@ -377,6 +377,41 @@ function fileToB64(file) {
   });
 }
 
+async function autoClassify() {
+  const btn = $("sticker-classify");
+  if (btn) btn.disabled = true;
+  let moved = 0;
+  let kept = 0;
+  let failed = 0;
+  let left = 0;
+  let round = 0;
+  try {
+    // 每批默认 6 张，避免单次请求过久；自动连点直到没有剩余（最多 8 批）
+    while (round < 8) {
+      round += 1;
+      setStickerResult("正在识图归类，逐张判断，稍等 …（第 " + round + " 批）", false);
+      const d = await bridge.apiPost("sticker-classify", { limit: 6 });
+      const c = (d && d.classify) || {};
+      moved += c.moved || 0;
+      kept += c.kept || 0;
+      failed += c.failed || 0;
+      left = c.remaining || 0;
+      if (!left || !c.batch || !c.moved) break;
+    }
+    setStickerResult(
+      "归类完成：归入意图 " + moved + "，留在「其他」" + kept + "，失败 " + failed +
+        (left ? "；还剩 " + left + " 张判不出类目，可再点一次。" : "。"),
+      false
+    );
+    stickersLoaded = false;
+    await loadStickers(true);
+  } catch (e) {
+    setStickerResult("归类失败：" + e.message, true);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function addCategory() {
   const inp = $("sticker-newcat");
   const name = inp && inp.value ? inp.value.trim() : "";
@@ -691,6 +726,7 @@ function bind() {
   $("sticker-refresh")?.addEventListener("click", () => loadStickers(true));
   $("sticker-addcat")?.addEventListener("click", addCategory);
   $("sticker-upload")?.addEventListener("click", () => $("sticker-file")?.click());
+  $("sticker-classify")?.addEventListener("click", autoClassify);
   $("sticker-file")?.addEventListener("change", (e) => {
     const arr = Array.from(e.target.files || []);
     e.target.value = "";

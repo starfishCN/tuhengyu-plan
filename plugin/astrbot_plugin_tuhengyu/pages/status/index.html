@@ -160,8 +160,8 @@
         <section class="panel">
           <h2>表情包库</h2>
           <p class="set-tip">
-            按分类展示，例：<code>stickers/开心/a.png</code>。内置情绪类：<code>开心 / 难过 / 生气 / 惊讶 / 无语 / 害羞</code>；
-            也可在下面新建自定义分类。散图与对话里收到的图归「其他」。bot 回复时按这条回复的情绪，从同名目录里挑图。
+            按分类展示，例：<code>stickers/拒绝/a.png</code>。内置意图类：<code>拒绝 / 道歉 / 攻击 / 亲昵 / 赞同 / 提问 / 认输 / 害羞</code>；
+            也可在下面新建自定义分类（自定义类名也会作为识图的候选）。散图与对话里收到的图归「其他」。bot 回复时按这条回复的意图，从同名目录里挑图。
           </p>
           <div class="sticker-bar">
             <span id="sticker-summary" class="card-hint">读取中 …</span>
@@ -174,6 +174,7 @@
             <input id="sticker-newcat" class="set-input" type="text" placeholder="新分类名" maxlength="20" />
             <button id="sticker-addcat" class="btn btn-ghost" type="button">新建分类</button>
             <button id="sticker-upload" class="btn" type="button">上传图片</button>
+            <button id="sticker-classify" class="btn btn-ghost" type="button">自动归类</button>
             <input id="sticker-file" type="file" accept="image/*" multiple hidden />
           </div>
           <div id="sticker-result" class="action-result" hidden></div>

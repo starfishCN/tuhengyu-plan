@@ -21,9 +21,12 @@ from astrbot.api.message_components import Image
 from astrbot.api.star import Context, Star
 from astrbot.api.web import error_response, json_response, request as web_request
 
+from .core.classify import classify_image
+from .core.intent import FALLBACK as INTENT_FALLBACK
+from .core.intent import labels as intent_labels
 from .core.persona import resolve_persona
 from .core.scheduler import LifeScheduler
-from .core.stickers import read_base64, save_collected, thumb_b64
+from .core.stickers import SYSTEM_LABELS, read_base64, save_collected, thumb_b64
 
 # Web API 路由必须以插件名为前缀（AstrBot 约定，2026-10-01 核对官方文档）。
 PLUGIN_NAME = "astrbot_plugin_tuhengyu"
@@ -65,7 +68,7 @@ class TuhengyuPlugin(Star):
                 f"/{PLUGIN_NAME}/stickers",
                 self.page_stickers,
                 ["GET"],
-                "插件页面：表情包库（按情绪分组）",
+                "插件页面：表情包库（按意图分组）",
             )
             context.register_web_api(
                 f"/{PLUGIN_NAME}/sticker-category",
@@ -78,6 +81,12 @@ class TuhengyuPlugin(Star):
                 self.page_sticker_upload,
                 ["POST"],
                 "插件页面：上传表情包",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/sticker-classify",
+                self.page_sticker_classify,
+                ["POST"],
+                "插件页面：识图自动归类",
             )
             context.register_web_api(
                 f"/{PLUGIN_NAME}/settings",
@@ -366,7 +375,7 @@ class TuhengyuPlugin(Star):
             return error_response("调度器未运行（插件可能被禁用）", status_code=409)
         lib = self._scheduler.stickers
         try:
-            groups = lib.groups_by_emotion()
+            groups = lib.groups_by_intent()
         except Exception as e:
             return error_response(f"读取表情包失败：{e}", status_code=500)
 
@@ -467,6 +476,64 @@ class TuhengyuPlugin(Star):
         out["running"] = True
         out["message"] = msg
         return json_response(out)
+
+    async def page_sticker_classify(self):
+        """POST /astrbot_plugin_tuhengyu/sticker-classify —— 识图把散图归入意图类目。
+
+        对 default / collected 下的图逐张调一次多模态模型（消耗 token，只在这里发生）。
+        用户自建分类名也作为候选类目参与判定；判为「其他」的原样不动。
+        """
+        if self._scheduler is None:
+            return error_response("调度器未运行（插件可能被禁用）", status_code=409)
+        lib = self._scheduler.stickers
+        exclude = set(intent_labels()) | set(SYSTEM_LABELS)
+        extra = [c for c in lib.categories() if c not in exclude]
+        try:
+            provider = self.context.get_using_provider()
+        except Exception as e:
+            self.logger.warning(f"[图恒宇] 取模型失败：{e}")
+            provider = None
+        if provider is None:
+            return error_response("未配置对话模型，无法识图归类", status_code=400)
+        try:
+            body = await web_request.json({})
+        except Exception:
+            body = {}
+        try:
+            limit = int((body or {}).get("limit", 6))
+        except (TypeError, ValueError):
+            limit = 6
+        if limit <= 0:
+            limit = 6
+        targets = lib.classify_targets()
+        batch = targets[:limit]
+        moved, kept, failed = 0, 0, 0
+        for _tag, path in batch:
+            cat = await classify_image(provider, path, extra=extra)
+            if cat == INTENT_FALLBACK:
+                kept += 1
+                continue
+            ok, _msg = lib.move_image(path, cat)
+            if ok:
+                moved += 1
+            else:
+                failed += 1
+        remaining = len(lib.classify_targets())
+        data = self._scheduler.status_dict()
+        data["running"] = True
+        data["classify"] = {
+            "total": len(targets),
+            "batch": len(batch),
+            "moved": moved,
+            "kept": kept,
+            "failed": failed,
+            "remaining": remaining,
+        }
+        data["message"] = (
+            f"本批 {len(batch)} 张：归类 {moved}，留在「其他」{kept}，失败 {failed}；"
+            f"尚有 {remaining} 张未处理"
+        )
+        return json_response(data)
 
     # ---------- 插件页面：设置读写 ----------
     def _load_schema(self) -> dict:
