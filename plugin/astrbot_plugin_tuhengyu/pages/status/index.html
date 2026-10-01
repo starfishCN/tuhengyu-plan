@@ -26,8 +26,9 @@
         <div class="hero-sub">
           <span>作息来源：<b id="source">—</b></span>
           <span id="schedule-desc">—</span>
-          <span id="persona-state">—</span>
+          <span>人设：<b id="persona-state">—</b></span>
         </div>
+        <div id="persona-note" class="hero-note" hidden></div>
       </section>
 
       <section class="grid">
@@ -62,8 +63,9 @@
             <div class="action-text">
               <div class="action-title">换人设后按这个</div>
               <div class="action-desc">
-                丢弃盘上已有的作息，重新读 <code>persona_prompt</code>，让模型按新的人设生成一份一天的作息。
-                作息只在生成时读人设，改完人设不按这里不会生效。
+                丢弃盘上已有的作息，重新读<b>当前人设</b>，让模型按新的人设生成一份一天的作息。
+                人设来自 AstrBot 的「人格」（在插件配置的「人格」里选，或留空跟随默认），
+                改完人设不按这里，作息不会自己变。
               </div>
               <div id="reschedule-warn" class="action-warn" hidden></div>
             </div>

@@ -18,6 +18,7 @@ from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star
 from astrbot.api.web import error_response, json_response
 
+from .core.persona import resolve_persona
 from .core.scheduler import LifeScheduler
 
 # Web API 路由必须以插件名为前缀（AstrBot 约定，2026-10-01 核对官方文档）。
@@ -60,9 +61,25 @@ class TuhengyuPlugin(Star):
             self.logger.info("[图恒宇] 插件已禁用，不启动调度器。")
             return
         self._scheduler = LifeScheduler(self.context, self.config, self._data_dir())
+        await self._refresh_persona()  # 先解析人设，作息生成依赖它
         await self._scheduler.setup()  # 生成 / 读取作息（失败会兜底，不抛）
         self._task = asyncio.create_task(self._scheduler.run(), name="tuhengyu_scheduler")
         self.logger.info("[图恒宇] 生活调度器已启动。")
+
+    async def _refresh_persona(self) -> None:
+        """重新从 AstrBot 解析当前人设并下发给调度器 / 作息。
+
+        每次对外查询前都跑一遍：这样博士在 AstrBot 里换了人格，插件立刻跟上，
+        不必重启插件、也不必再往插件里抄一份人设。
+        """
+        if self._scheduler is None:
+            return
+        try:
+            text, label, name = await resolve_persona(self.context, self.config)
+        except Exception as e:  # 解析失败不致命，退回原值
+            self.logger.warning(f"[图恒宇] 解析人设失败：{e}")
+            return
+        self._scheduler.set_persona(text, label, name)
 
     def _data_dir(self) -> str:
         """插件数据目录：data/plugin_data/astrbot_plugin_tuhengyu。"""
@@ -88,6 +105,7 @@ class TuhengyuPlugin(Star):
         """生成并发布一条空间动态。命令与插件页面共用同一条路径。"""
         if self._scheduler is None:
             return {"ok": False, "message": "调度器未运行（插件可能被禁用）。"}
+        await self._refresh_persona()
         from .core.llm import generate_moment_text
 
         st = self._scheduler.schedule.state_at()
@@ -111,6 +129,7 @@ class TuhengyuPlugin(Star):
         if self._scheduler is None:
             yield event.plain_result("[图恒宇] 调度器未运行（插件可能被禁用）。")
             return
+        await self._refresh_persona()
         yield event.plain_result(self._scheduler.status_text())
 
     @filter.command("图恒宇测试")
@@ -136,6 +155,7 @@ class TuhengyuPlugin(Star):
         """GET /astrbot_plugin_tuhengyu/status —— 结构化运行状态。"""
         if self._scheduler is None:
             return json_response({"running": False})
+        await self._refresh_persona()
         data = self._scheduler.status_dict()
         data["running"] = True
         return json_response(data)
@@ -144,6 +164,7 @@ class TuhengyuPlugin(Star):
         """POST /astrbot_plugin_tuhengyu/reschedule —— 丢弃旧作息并重新生成。"""
         if self._scheduler is None:
             return error_response("调度器未运行（插件可能被禁用）", status_code=409)
+        await self._refresh_persona()  # 先取当前人设，再按它重算
         try:
             await self._scheduler.schedule.regenerate(self.context)
         except Exception as e:

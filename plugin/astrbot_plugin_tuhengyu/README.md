@@ -3,7 +3,7 @@
 给 bot「完整的一生」。第一版：**作息 + 调度器 + 发 QQ 空间**。
 
 - 包名：`astrbot_plugin_tuhengyu`
-- 版本：0.2.4
+- 版本：0.2.5
 - 支持平台：`aiocqhttp`（OneBot v11）
 - 许可：待定（见项目 README）
 
@@ -38,7 +38,7 @@ docker restart astrbot
 启动成功的话，日志里会出现：
 
 ```
-Plugin astrbot_plugin_tuhengyu (0.2.4) by starfishCN
+Plugin astrbot_plugin_tuhengyu (0.2.5) by starfishCN
 [图恒宇] 生活调度器已启动。
 ```
 
@@ -53,14 +53,14 @@ Plugin astrbot_plugin_tuhengyu (0.2.4) by starfishCN
 
 在 WebUI 的插件详情页里有一页「运行状态」（`pages/status/`），不用敲命令就能看：
 
-- 此刻状态（scene · state）、醒着/睡着、作息来源与段数、人设是否已填
+- 此刻状态（scene · state）、醒着/睡着、作息来源与段数、**当前人设（来自哪个人格）**
 - 触发概率：基准 × 状态倍数 → 生效值
 - 检查间隔、发空间开关与最短间隔、上次发空间时间
 - 作息时段表（当前命中的那一行高亮）
 - **操作面板**：
-  - **重算作息** —— *换人设后按这个*。丢弃盘上作息，重新读 `persona_prompt` 让模型生成一份。
+  - **重算作息** —— *换人设后按这个*。丢弃盘上作息，重新读**当前人设**让模型生成一份。
     ⚠️ 作息只在生成时读人设，改完人设不按它不会生效（重启插件也行，但会重来一遍）。
-    人设为空时只会得到保守默认，页面会直接提示。
+    页面会自动比对：人设与盘上作息对不上时，顶部会提示「建议重算」。
   - **测试发一条** —— 等同 QQ 里的 `/图恒宇测试`，立即生成并发布一条空间动态。
     **会产生真实动态**，点击前有确认框。
 
@@ -68,7 +68,7 @@ Plugin astrbot_plugin_tuhengyu (0.2.4) by starfishCN
 
 | 方法 | 路由 | 作用 |
 |---|---|---|
-| GET | `/astrbot_plugin_tuhengyu/status` | 结构化运行状态（含 `persona_set` / `schedule_auto`） |
+| GET | `/astrbot_plugin_tuhengyu/status` | 结构化运行状态（含 `persona_set` / `persona_label` / `persona_pending` / `schedule_auto`） |
 | POST | `/astrbot_plugin_tuhengyu/reschedule` | 丢弃旧作息并按人设重新生成 |
 | POST | `/astrbot_plugin_tuhengyu/test-moment` | 立即生成并发布一条（返回 `result`） |
 
@@ -83,7 +83,8 @@ Plugin astrbot_plugin_tuhengyu (0.2.4) by starfishCN
 | 分组 | 键 | 说明 | 默认 |
 |---|---|---|---|
 | — | `enabled` | 总开关 | `true` |
-| — | `persona_prompt` | **人设** —— 告诉它「你是谁」，作息和说说内容都由它决定 | 空 |
+| — | `persona_id` | **人格** —— 下拉选 AstrBot 已配置的人格。**留空 = 跟随 AstrBot 当前默认人格**（换了人格自动跟上） | 空 |
+| — | `persona_prompt` | 人设补充（可选），追加在所选人格后面 | 空 |
 | `chat_private` | `enabled` / `prompt` / `model` | 私聊场景说明与模型 | 开 |
 | `chat_group` | `enabled` / `prompt` / `model` | 群聊场景说明与模型 | 开 |
 | `schedule` | `auto_generate` | 按人设自动生成作息 | `true` |
@@ -106,14 +107,18 @@ Plugin astrbot_plugin_tuhengyu (0.2.4) by starfishCN
 
 ### 人设怎么填
 
-`persona_prompt` 就是角色的「底色」。比如：
+**不用在插件里抄一份。** 插件直接读 AstrBot 的「人格」：
 
-```
-你是「小夜」，一个话不多的夜班便利店店员。说话短，偶尔冷幽默，
-喜欢观察来店里的客人，不爱用感叹号。你发动态是为了记录，不是为了营业。
-```
+1. 在 AstrBot WebUI 里把人格配好（人格页 / 默认人格）；
+2. 插件配置里的 `persona_id` **留空**，即跟随 AstrBot 当前默认人格；
+3. 想给这个插件单独指定另一个，就在 `persona_id` 的下拉里挑一个。
 
-留空的话，插件会用内置的通用口吻（一个普通人随手记心情）。
+少数情况下需要在人格之外再加一段说明（比如插件专有的补充），才填 `persona_prompt`。
+
+都没配的话，插件用内置的通用口吻（一个普通人随手记心情）。
+
+> 0.2.5 起：`persona_prompt` 不再是唯一来源。此前在插件里手抄人设的写法仍能跑，
+> 但它现在只是「补充」，主来源是 AstrBot 的人格。
 
 ## 原理备注（给好奇的人）
 

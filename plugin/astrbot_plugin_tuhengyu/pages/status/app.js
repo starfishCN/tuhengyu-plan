@@ -94,16 +94,30 @@ function render(data) {
 
   // 人设 / 作息模式：决定「重算作息」按钮会得到什么
   if (data.persona_set) {
-    text("persona-state", "人设已填");
+    text("persona-state", data.persona_label || "已设置");
   } else {
-    text("persona-state", "人设未填");
+    text("persona-state", "未检测到");
+  }
+  const note = $("persona-note");
+  if (note) {
+    let msg = "";
+    if (!data.persona_set) {
+      msg =
+        "没读到人设。去 AstrBot 的「人格」里配一个，或在本插件配置的「人格」下拉里指定；都为空时作息只会得到保守默认。";
+    } else if (data.schedule_error) {
+      msg = `作息没能按人设生成（${data.schedule_error}）。常见原因：AstrBot 里没有可用的对话模型，或模型调用报错 —— 看日志里的 [图恒宇] 行。`;
+    } else if (data.persona_pending) {
+      msg = "检测到人设与盘上的作息对不上（换过人格），建议点下面的「重算作息」。";
+    }
+    note.hidden = !msg;
+    note.textContent = msg;
   }
   const warn = $("reschedule-warn");
   if (warn) {
     if (!data.persona_set) {
       warn.hidden = false;
       warn.textContent =
-        "当前 persona_prompt 为空，点「重算作息」只会得到保守默认（09:00–23:00 醒、场景「在家待着 · 闲着」）。先去插件配置里填人设。";
+        "当前没有可用人设，点「重算作息」只会得到保守默认（09:00–23:00 醒、场景「在家待着 · 闲着」）。先去 AstrBot 里配人格。";
     } else if (!data.schedule_auto) {
       warn.hidden = false;
       warn.textContent =

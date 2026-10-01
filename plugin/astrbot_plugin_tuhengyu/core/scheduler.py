@@ -85,6 +85,17 @@ class LifeScheduler:
         self._last_moment = None  # datetime of last posted moment
         self.bridge = OneBotBridge(context)
         self._qzone = QzoneClient(self.bridge)
+        # 人设：由 main.py 从 AstrBot 人格解析后注入（插件不再自带一份正文）。
+        self.persona_text = ""
+        self.persona_label = ""
+        self.persona_name = ""
+
+    def set_persona(self, text: str, label: str = "", name: str = "") -> None:
+        """下发当前人设，并同步给作息（作息按人设指纹判断是否要重算）。"""
+        self.persona_text = str(text or "").strip()
+        self.persona_label = str(label or "").strip()
+        self.persona_name = str(name or "").strip()
+        self.schedule.set_persona(self.persona_text)
 
     # ---------- 启动 ----------
     async def setup(self) -> None:
@@ -144,7 +155,7 @@ class LifeScheduler:
         # 走直连 QQ 空间 Web 接口（带 cookie，逆向、可能随官方改动失效）。
         # 实现见 core/qzone.py。
         state_line = st.now_line() if st is not None else ""
-        content = await generate_moment_text(self.context, self.config, state_line)
+        content = await generate_moment_text(self.context, self.config, state_line, self.persona_text)
         if content:
             ok = await self._post_moment(content)
             if ok:
@@ -172,7 +183,7 @@ class LifeScheduler:
         sch = _section(self.config, "scheduler")
         moment = _section(self.config, "moment")
         sched = _section(self.config, "schedule")
-        persona = str(self.config.get("persona_prompt", "")).strip()
+        persona = self.persona_text or str(self.config.get("persona_prompt", "")).strip()
         base = float(sch.get("act_probability", 0.15))
         bias_on = bool(sch.get("state_bias", True))
         factor = state_bias(st, self.config) if bias_on else 1.0
@@ -186,6 +197,11 @@ class LifeScheduler:
             "schedule_desc": self.schedule.describe(),
             "periods": self.schedule.periods(),
             "persona_set": bool(persona),
+            "persona_label": self.persona_label,
+            "persona_name": self.persona_name,
+            "persona_preview": persona[:60],
+            "persona_pending": self.schedule.pending_change(),
+            "schedule_error": self.schedule.last_error(),
             "schedule_auto": bool(sched.get("auto_generate", True)),
             "manual_hours": sched.get("manual_hours", ""),
             "check_interval_minutes": sch.get("check_interval_minutes", 30),

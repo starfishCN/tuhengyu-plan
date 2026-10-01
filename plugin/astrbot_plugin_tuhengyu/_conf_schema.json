@@ -5,8 +5,16 @@
     "default": true
   },
 
+  "persona_id": {
+    "description": "人格：从 AstrBot 已配置的人格里挑一个",
+    "hint": "留空（推荐）= 跟随 AstrBot 当前默认人格 —— 在 AstrBot 里换了人格，这里会自动跟上。只有当你想给插件单独指定另一个人格时才填。",
+    "type": "string",
+    "_special": "select_persona",
+    "default": ""
+  },
   "persona_prompt": {
-    "description": "人设：告诉它「你是谁」。私聊和群聊共用这一份。留空则用内置的通用口吻",
+    "description": "人设补充（可选）：追加在上面那个人格后面",
+    "hint": "一般留空。人格已经写了「你是谁」，这里只放插件额外需要知道的说明。",
     "type": "text",
     "default": ""
   },

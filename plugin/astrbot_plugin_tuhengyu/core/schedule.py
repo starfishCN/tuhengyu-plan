@@ -101,14 +101,20 @@ class Schedule:
         self.path = os.path.join(data_dir, SCHEDULE_FILE)
         self._periods: list[dict] = []
         self._source = "conservative"
+        self._persona_text = ""  # 由 main.py 从 AstrBot 人格解析后注入
+        self._last_error = ""  # 最近一次没能用上人设的原因（给页面显示）
 
     # ---------- 配置 ----------
     def _section(self) -> dict:
         v = self.config.get("schedule")
         return v if isinstance(v, dict) else {}
 
+    def set_persona(self, text: str) -> None:
+        """注入人设正文。空串会退回读插件自己的 persona_prompt 补充。"""
+        self._persona_text = str(text or "").strip()
+
     def _persona(self) -> str:
-        return str(self.config.get("persona_prompt", "")).strip()
+        return self._persona_text or str(self.config.get("persona_prompt", "")).strip()
 
     def _fingerprint(self) -> str:
         raw = self._persona()
@@ -151,6 +157,7 @@ class Schedule:
         if not sec.get("auto_generate", True):
             self._periods = self._from_hours(manual)
             self._source = "manual"
+            self._last_error = ""
             logger.info(f"[图恒宇] 作息：手填（{manual or '默认'}）")
             return
 
@@ -160,6 +167,7 @@ class Schedule:
             if periods:
                 self._periods = periods
                 self._source = "generated"
+                self._last_error = ""
                 logger.info(f"[图恒宇] 作息：读盘（{len(periods)} 段）")
                 return
 
@@ -171,6 +179,7 @@ class Schedule:
         if periods:
             self._periods = periods
             self._source = "generated"
+            self._last_error = ""
             self._save(periods, "generated")
             logger.info(f"[图恒宇] 作息：已生成并存盘（{len(periods)} 段）")
         else:
@@ -179,6 +188,21 @@ class Schedule:
     def periods(self) -> list[dict]:
         """当前生效的时段表（副本），给状态查询用。"""
         return [dict(p) for p in (self._periods or CONSERVATIVE_PERIODS)]
+
+    def pending_change(self) -> bool:
+        """当前人设与生效作息是否对不上。
+
+        两种情况算「待重算」：
+          - 盘上有作息，但指纹与现人设不同（换过人格）；
+          - 盘上压根没有生成过（保守默认 / 手填），而现人设非空。
+        关掉自动生成时恒为 False —— 那时作息本来就该手填。
+        """
+        if not self._section().get("auto_generate", True):
+            return False
+        cached = self._load()
+        if cached:
+            return cached.get("fingerprint") != self._fingerprint()
+        return bool(self._persona()) and self._source != "generated"
 
     async def regenerate(self, context) -> None:
         """丢掉盘上的作息，重新生成一份（插件页面的「重算作息」按钮）。"""
@@ -195,6 +219,11 @@ class Schedule:
         logger.warning(f"[图恒宇] 作息：{reason}，用保守默认。")
         self._periods = [dict(p) for p in CONSERVATIVE_PERIODS]
         self._source = "conservative"
+        self._last_error = reason
+
+    def last_error(self) -> str:
+        """最近一次回落到保守默认的原因；一切正常时为空串。"""
+        return self._last_error
 
     def _from_hours(self, spec: str) -> list[dict]:
         """把 09:00-23:00 这类写法转成 periods（醒/睡两段）。"""

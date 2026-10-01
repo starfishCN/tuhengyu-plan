@@ -48,10 +48,13 @@ def with_state(prompt: str, state_line: str) -> str:
     return f"{prompt}\n\n此刻你{line}，内容要跟这个时刻对得上。"
 
 
-async def generate_moment_text(context, config: dict, state_line: str = "") -> str:
+async def generate_moment_text(
+    context, config: dict, state_line: str = "", persona: str = ""
+) -> str:
     """生成一条说说内容。失败返回空串。
 
     state_line：来自作息的「此刻」描述。有它，内容才不是凭空写的。
+    persona：已解析好的人设正文（AstrBot 人格 + 插件补充）。留空则回退读配置。
     """
     moment = _section(config, "moment")
     provider_id = await resolve_provider_id(
@@ -61,7 +64,11 @@ async def generate_moment_text(context, config: dict, state_line: str = "") -> s
         logger.warning("[图恒宇] 没有可用的对话模型，跳过发空间。")
         return ""
 
-    system_prompt = str(config.get("persona_prompt", "")).strip() or DEFAULT_SYSTEM_PROMPT
+    system_prompt = (
+        str(persona or "").strip()
+        or str(config.get("persona_prompt", "")).strip()
+        or DEFAULT_SYSTEM_PROMPT
+    )
     prompt = with_state(str(moment.get("prompt", "")).strip() or DEFAULT_PROMPT, state_line)
 
     try:
