@@ -54,6 +54,36 @@ LOGO_SVG = """
 """
 
 CSS = """
+/* ---------- 基础：防白闪 ----------
+   页面加载瞬间会先显示浏览器默认背景。深色面板上那是一道刺眼的白闪，
+   所以在 html 层就压住底色；浅色模式交给 Quasar 的 body--light 覆盖。 */
+html { background-color: #0b1020; }
+body.body--light { background-color: #f1f5f9; }
+
+/* ---------- 入场动画 ----------
+   登录成功后整页跳转过来，内容「浮现」而不是硬切。
+   用 animation（非 transition），元素创建时播一次；
+   曲线取 easeOutQuint：起手快、收尾稳，比 linear 自然。 */
+@keyframes tg-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.tg-brand { animation: tg-enter .4s cubic-bezier(.22,1,.36,1) both; }
+.tg-main  { animation: tg-enter .5s cubic-bezier(.22,1,.36,1) .06s both; }
+/* 主区里的卡片逐张浮现，形成自上而下的扫入感 */
+.tg-main > * { animation: tg-enter .5s cubic-bezier(.22,1,.36,1) both; }
+.tg-main > *:nth-child(1) { animation-delay: .10s; }
+.tg-main > *:nth-child(2) { animation-delay: .17s; }
+.tg-main > *:nth-child(3) { animation-delay: .24s; }
+.tg-main > *:nth-child(4) { animation-delay: .31s; }
+.tg-main > *:nth-child(5) { animation-delay: .38s; }
+.tg-main > *:nth-child(6) { animation-delay: .45s; }
+.tg-main > *:nth-child(n+7) { animation-delay: .5s; }
+/* 尊重系统的「减少动态效果」设置 */
+@media (prefers-reduced-motion: reduce) {
+  .tg-brand, .tg-main, .tg-main > * { animation: none !important; }
+}
+
 /* ---------- 品牌栏 ---------- */
 .tg-brand {
   background:
@@ -446,7 +476,7 @@ def index():
         ).tooltip("退出登录")
 
     # 主区
-    with ui.column().classes("w-full max-w-5xl mx-auto gap-4 p-4"):
+    with ui.column().classes("tg-main w-full max-w-5xl mx-auto gap-4 p-4"):
 
         with ui.card().classes("tg-card w-full"):
             ui.label("部署步骤").classes("text-sm font-semibold opacity-70")
@@ -601,7 +631,13 @@ _LOGIN_TPL = """<!DOCTYPE html>
       radial-gradient(900px 500px at 12% -10%, rgba(34,211,238,.15), transparent 60%),
       radial-gradient(800px 520px at 88% -18%, rgba(129,140,248,.17), transparent 60%);
   }
+  @keyframes tg-enter {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce) { .card { animation: none !important; } }
   .card {
+    animation: tg-enter .45s cubic-bezier(.22,1,.36,1) both;
     width: 100%; max-width: 372px; padding: 34px 28px 26px;
     background: rgba(18,25,44,.92);
     border: 1px solid rgba(148,163,184,.16);
