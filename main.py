@@ -61,27 +61,47 @@ html { background-color: #0b1020; }
 body.body--light { background-color: #f1f5f9; }
 
 /* ---------- 入场动画 ----------
-   登录成功后整页跳转过来，内容「浮现」而不是硬切。
-   用 animation（非 transition），元素创建时播一次；
+   先说为什么不用 CSS animation（第一版就栽在这里）：
+   面板是**客户端渲染** —— 初始 HTML 里只有一个 <div id="app">，界面全部由
+   Vue 构建；而且 NiceGUI 在数据到达之前会把容器藏起来。CSS animation 在
+   元素刚插入 DOM 时就开始计时，等它真正显示出来时，动画往往已经播完。
+   → 所以改为：由 JS 在确认元素**真的可见**之后加 .tg-in，用 transition 过渡。
+     · 初始态：html 上还没有 .tg-in 时，内容透明且下移
+     · 触发：ENTER_JS 轮询 .tg-main 出现且可见 → 加 .tg-in
+     · 兜底：万一脚本没跑，3 秒后由 animation 强制显示（绝不让面板空着）
    曲线取 easeOutQuint：起手快、收尾稳，比 linear 自然。 */
-@keyframes tg-enter {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
+
+.tg-brand,
+.tg-main > * {
+  transition: opacity .6s cubic-bezier(.22,1,.36,1),
+              transform .6s cubic-bezier(.22,1,.36,1);
 }
-.tg-brand { animation: tg-enter .4s cubic-bezier(.22,1,.36,1) both; }
-.tg-main  { animation: tg-enter .5s cubic-bezier(.22,1,.36,1) .06s both; }
-/* 主区里的卡片逐张浮现，形成自上而下的扫入感 */
-.tg-main > * { animation: tg-enter .5s cubic-bezier(.22,1,.36,1) both; }
-.tg-main > *:nth-child(1) { animation-delay: .10s; }
-.tg-main > *:nth-child(2) { animation-delay: .17s; }
-.tg-main > *:nth-child(3) { animation-delay: .24s; }
-.tg-main > *:nth-child(4) { animation-delay: .31s; }
-.tg-main > *:nth-child(5) { animation-delay: .38s; }
-.tg-main > *:nth-child(6) { animation-delay: .45s; }
-.tg-main > *:nth-child(n+7) { animation-delay: .5s; }
+/* 卡片错开，形成自上而下的扫入感 */
+.tg-main > *:nth-child(1) { transition-delay: .08s; }
+.tg-main > *:nth-child(2) { transition-delay: .16s; }
+.tg-main > *:nth-child(3) { transition-delay: .24s; }
+.tg-main > *:nth-child(4) { transition-delay: .32s; }
+.tg-main > *:nth-child(5) { transition-delay: .40s; }
+.tg-main > *:nth-child(6) { transition-delay: .48s; }
+.tg-main > *:nth-child(n+7) { transition-delay: .54s; }
+
+html:not(.tg-in) .tg-brand { opacity: 0; transform: translateY(28px); }
+html:not(.tg-in) .tg-main > * { opacity: 0; transform: translateY(28px); }
+
+/* 兜底：脚本若没触发，3 秒后强制显示 */
+@keyframes tg-force {
+  to { opacity: 1; transform: translateY(0); }
+}
+html:not(.tg-in) .tg-brand,
+html:not(.tg-in) .tg-main > * {
+  animation: tg-force .35s ease 3s forwards;
+}
+
 /* 尊重系统的「减少动态效果」设置 */
 @media (prefers-reduced-motion: reduce) {
-  .tg-brand, .tg-main, .tg-main > * { animation: none !important; }
+  .tg-brand, .tg-main > * { transition: none !important; animation: none !important; }
+  html:not(.tg-in) .tg-brand,
+  html:not(.tg-in) .tg-main > * { opacity: 1 !important; transform: none !important; }
 }
 
 /* ---------- 品牌栏 ---------- */
@@ -239,10 +259,47 @@ function tgCopy(btn, text) {
 </script>
 """
 
+# 入场动画触发器。
+# 面板是客户端渲染，界面元素由 Vue 在数据到达后才插入 DOM，
+# 而 NiceGUI 在数据到达前会隐藏容器 —— 纯 CSS 动画会在「还看不见」时
+# 就播完。所以这里轮询等 .tg-main 出现**且可见**，再放行过渡。
+# offsetParent !== null 用来判断元素真的参与布局（display:none 时为 null）。
+ENTER_JS = """
+<script>
+(function () {
+  var root = document.documentElement;
+  var fired = false;
+  function fire() {
+    if (fired) { return; }
+    fired = true;
+    root.classList.add('tg-in');
+  }
+  var tries = 0;
+  var iv = setInterval(function () {
+    tries++;
+    var el = document.querySelector('.tg-main');
+    if (el && el.offsetParent !== null) {
+      clearInterval(iv);
+      // 等两帧，确保初始态已被浏览器采纳，transition 才有起点
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { setTimeout(fire, 30); });
+      });
+    } else if (tries > 80) {
+      clearInterval(iv);
+      fire();
+    }
+  }, 40);
+  // 绝对兜底
+  setTimeout(fire, 3200);
+})();
+</script>
+"""
+
 
 def apply_style() -> None:
     ui.add_head_html(f"<style>{CSS}</style>")
     ui.add_head_html(COPY_JS)
+    ui.add_head_html(ENTER_JS)
 
 
 def _fmt(r: dict) -> str:
