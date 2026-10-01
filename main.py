@@ -61,47 +61,58 @@ html { background-color: #0b1020; }
 body.body--light { background-color: #f1f5f9; }
 
 /* ---------- 入场动画 ----------
-   为什么改了两版（记下来，免得下次又走回头路）：
+   为什么改了三版（记下来，免得下次又走回头路）：
 
    v1 用 CSS animation —— 面板是**客户端渲染**，元素插入 DOM 时动画即开始
       计时，而容器此时还藏着，等显示出来动画早跑完了 → 看不到。
 
-   v2 改成「JS 确认元素可见后加 class 走 transition」—— 但「可见」这个
-      判断本身不可靠：NiceGUI 何时让容器可见不由我们控制；而且那个超时
-      放行会在元素出现**之前**就加上 class，等于把动画自己取消了 → 看不到。
+   v2 「检测到可见后加 class 走 transition」—— 机制本来是对的，但有两个
+      真凶把它盖住了（见下）。
 
-   v3（现在）：**不做初始隐藏**。元素先正常显示，等页面稳定后由 JS 主动
-      「倒带」—— 先用内联样式把它打回起点，强制重排，再撤销内联样式，
-      transition 就有了明确的起点和终点，必然播放。
-      这样彻底绕开「元素何时可见」这个不可控问题；
-      而且万一脚本没跑，元素本来就是可见的 —— 不会有空白面板。
+   v3 「倒带式重播」—— 为绕开时序判断，让元素先显示再打回起点重播。
+      能跑，但**会先闪一下完整内容**才播动画，观感是错的。已废弃。
 
-   曲线取 easeOutQuint：起手快、收尾稳，比 linear 自然。 */
+   → 现在回到 v2 的路子，并修掉两个真凶：
+
+   真凶一：前几版都写了 `@media (prefers-reduced-motion: reduce)`，把动画
+           整个关掉 —— 用户系统开着「减弱动态效果」时，三代全都不动。
+           已移除（私有面板，按要求强制播放）。
+
+   真凶二：v2 里的「超时放行」会在元素出现**之前**就加上 class，等于把动画
+           自己取消了。已移除 —— 脚本万一没跑，由 CSS 的 3 秒兜底负责显示。
+
+   时序：元素从插入 DOM 起就是透明的（下面设了初始隐藏）→ JS 检测到它真的
+   有高度了 → 加 .tg-in → 淡入。全程**不会闪出完整内容**。
+
+   曲线：0.8s + easeOutQuart —— 比 v3 的 .6s + easeOutQuint 更缓，
+   起手不猛、收尾柔和。 */
+
+@keyframes tg-force {
+  to { opacity: 1; transform: translateY(0); }
+}
 
 .tg-brand,
 .tg-main > * {
-  transition: opacity .6s cubic-bezier(.22,1,.36,1),
-              transform .6s cubic-bezier(.22,1,.36,1);
+  transition: opacity .8s cubic-bezier(.16,.84,.44,1),
+              transform .8s cubic-bezier(.16,.84,.44,1);
 }
-/* 卡片错开，形成自上而下的扫入感（倒带后由它决定各卡片先后） */
-.tg-main > *:nth-child(1) { transition-delay: .08s; }
-.tg-main > *:nth-child(2) { transition-delay: .16s; }
-.tg-main > *:nth-child(3) { transition-delay: .24s; }
-.tg-main > *:nth-child(4) { transition-delay: .32s; }
-.tg-main > *:nth-child(5) { transition-delay: .40s; }
-.tg-main > *:nth-child(6) { transition-delay: .48s; }
-.tg-main > *:nth-child(n+7) { transition-delay: .54s; }
+/* 卡片错开，形成自上而下的扫入感 */
+.tg-main > *:nth-child(1) { transition-delay: .1s; }
+.tg-main > *:nth-child(2) { transition-delay: .2s; }
+.tg-main > *:nth-child(3) { transition-delay: .3s; }
+.tg-main > *:nth-child(4) { transition-delay: .4s; }
+.tg-main > *:nth-child(5) { transition-delay: .5s; }
+.tg-main > *:nth-child(6) { transition-delay: .6s; }
+.tg-main > *:nth-child(n+7) { transition-delay: .68s; }
 
-/* 注：这里刻意**没有**写 prefers-reduced-motion 保护。
-   前两版都写了，而它很可能正是「怎么改都看不到」的原因 ——
-   用户系统若开着「减弱动态效果」，那段 media 查询会把 transition 整个
-   关掉，三版代码全都不会有效果。此面板是私有部署，用户明确要求这个
-   视觉反馈，所以观感优先。
-   若要恢复无障碍行为，把下面这段加回来：
-   @media (prefers-reduced-motion: reduce) {
-     .tg-brand, .tg-main > * { transition: none !important; }
-   }
-   */
+html:not(.tg-in) .tg-brand { opacity: 0; transform: translateY(24px); }
+html:not(.tg-in) .tg-main > * { opacity: 0; transform: translateY(24px); }
+
+/* 兜底：脚本若没跑，3 秒后强制显示（否则会一直停在透明状态） */
+html:not(.tg-in) .tg-brand,
+html:not(.tg-in) .tg-main > * {
+  animation: tg-force .5s ease 3s forwards;
+}
 
 /* ---------- 品牌栏 ---------- */
 .tg-brand {
@@ -258,55 +269,25 @@ function tgCopy(btn, text) {
 </script>
 """
 
-# 入场动画触发器（v3：倒带式重播）。
+# 入场动画触发器。
 #
-# 前两版都栽在同一个坑上：想「等元素可见再播动画」，但 NiceGUI 何时让
-# 容器可见不由我们控制，判断时机不可靠。这一版不再依赖可见性：
-#   1. 元素先正常显示（CSS 里没有隐藏规则，所以不存在空白面板的风险）
-#   2. 轮询等 .tg-main 出现且有实际高度，再等 400ms 让页面彻底稳定
-#   3. 用内联样式把元素打回起点（透明 + 下移），强制重排，
-#      再撤销内联样式 —— transition 就有了明确的起点和终点，必然播放
+# 时序要点：元素**从插入 DOM 那一刻**起就是透明的（CSS 里 html:not(.tg-in)
+# 设了初始隐藏），所以不会先闪出完整内容。JS 只负责在确认它真的渲染出来
+# 之后，加上 .tg-in 放行。
 #
-# 若系统开了「减少动态效果」，直接跳过，不做任何事。
+# 两个踩过的坑：
+#   · 不要设「超时提前放行」—— 那会在元素出现之前就加 class，等于取消动画。
+#     脚本万一没跑，由 CSS 的 3 秒兜底动画负责显示。
+#   · 不要「倒带重播」（先正常显示、再打回起点）—— 能跑，但会先闪一下完整内容。
 ENTER_JS = """
 <script>
 (function () {
-  // 刻意**不**检查 prefers-reduced-motion：用户系统若开着「减弱动态效果」，
-  // 那正是前几版全都看不到动画的原因。此为私有面板，按要求强制播放。
-
-  function collect() {
-    var els = [];
-    var brand = document.querySelector('.tg-brand');
-    if (brand) { els.push(brand); }
-    var items = document.querySelectorAll('.tg-main > *');
-    for (var i = 0; i < items.length; i++) { els.push(items[i]); }
-    return els;
-  }
-
-  function rewind() {
-    var main = document.querySelector('.tg-main');
-    if (!main || main.getBoundingClientRect().height === 0) { return; }
-    var els = collect();
-    if (!els.length) { return; }
-
-    for (var i = 0; i < els.length; i++) {
-      els[i].style.transition = 'none';
-      els[i].style.opacity = '0';
-      els[i].style.transform = 'translateY(36px)';
-    }
-
-    // 读一次布局，强制浏览器采纳上面的起点
-    void document.documentElement.offsetHeight;
-
-    requestAnimationFrame(function () {
-      requestAnimationFrame(function () {
-        for (var j = 0; j < els.length; j++) {
-          els[j].style.transition = '';
-          els[j].style.opacity = '';
-          els[j].style.transform = '';
-        }
-      });
-    });
+  var root = document.documentElement;
+  var fired = false;
+  function fire() {
+    if (fired) { return; }
+    fired = true;
+    root.classList.add('tg-in');
   }
 
   var tries = 0;
@@ -318,11 +299,15 @@ ENTER_JS = """
       && el.getBoundingClientRect().height > 0;
     if (ok) {
       clearInterval(iv);
-      setTimeout(rewind, 400);
-    } else if (tries > 600) {
-      clearInterval(iv);   // 30 秒还没就绪就放弃；元素本来就是可见的，不影响使用
+      // 等两帧，确保初始隐藏已被浏览器采纳，transition 才有起点
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { fire(); });
+      });
+    } else if (tries > 750) {
+      // 30 秒还没就绪就停手，交给 CSS 兜底显示，绝不把面板锁在透明状态
+      clearInterval(iv);
     }
-  }, 50);
+  }, 40);
 })();
 </script>
 """
