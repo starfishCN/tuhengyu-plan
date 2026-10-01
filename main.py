@@ -82,22 +82,31 @@ CSS = """
 
 /* 图标与中文混排的对齐：
    Material Icons 的字形基线是按英文调的，与中文并排时容易显得上下不齐。
-   统一 flex 居中 + 图标略放大 + 明确间距。 */
+   统一 flex 居中 + 图标略放大 + 明确间距。
+   横向改左对齐：按钮撑满整行时，居中对齐会让每个按钮的图标各自偏移，
+   竖向扫读呈锯齿状；左对齐后图标落在同一条竖线上。 */
 .tg-step .q-btn__content {
   align-items: center !important;
-  justify-content: center !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
+  width: 100% !important;
   line-height: 1.35 !important;
   gap: 6px !important;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
 }
 .tg-step .q-icon {
   font-size: 1.2em !important;
   vertical-align: middle !important;
   line-height: 1 !important;
+  flex: 0 0 auto;
 }
 .tg-step .q-btn__content > span {
   display: inline-flex;
   align-items: center;
   line-height: 1.35;
+  flex: 1 1 auto;
+  text-align: left;
 }
 
 /* 品牌栏 logo：行内 SVG 默认按基线对齐，会与标题文字错位 */
