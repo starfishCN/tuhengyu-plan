@@ -21,8 +21,8 @@ SCHEDULE_FILE = "schedule.json"
 
 # 保守默认。宁可安静，也别顶着错的人设乱发东西。
 CONSERVATIVE_PERIODS = [
-    {"start": "09:00", "end": "23:00", "scene": "醒着", "state": "普通", "awake": True},
-    {"start": "23:00", "end": "09:00", "scene": "睡着了", "state": "睡着", "awake": False},
+    {"start": "09:00", "end": "23:00", "scene": "在家待着", "state": "闲着", "awake": True},
+    {"start": "23:00", "end": "09:00", "scene": "睡了", "state": "睡着", "awake": False},
 ]
 
 
@@ -36,7 +36,8 @@ class ScheduleState:
     source: str  # generated / manual / conservative
 
     def brief(self) -> str:
-        return f"{'醒着' if self.awake else '睡着'} · {self.scene} · {self.state}"
+        # 只拼 scene · state：醒/睡已由 scene 表达，再加前缀会重复（会出「醒着 · 醒着 · 普通」）。
+        return f"{self.scene} · {self.state}"
 
     def now_line(self) -> str:
         """给内容生成用的一行「此刻」，让生成的东西贴得上现在的状态。"""

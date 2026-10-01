@@ -24,11 +24,11 @@ logger = logging.getLogger("astrbot")
 
 # 状态→概率倍数。命中关键词即取该值，都不命中为 1.0。
 # 关键词写在 scene / state 里（模型生成时是自由文本，只能模糊匹配）。
-STATE_BIAS = [
-    (0.35, ("忙", "工作", "上班", "上课", "学习", "考试", "开会", "加班", "赶", "通勤", "车里")),
-    (1.60, ("闲", "空", "休息", "放松", "发呆", "散步", "咖啡", "茶", "听歌", "躺", "阳台", "夜")),
-]
+# 倍数与词表都可由插件配置覆盖，见 bias_table()。
+DEFAULT_BUSY_WORDS = ("忙", "工作", "上班", "上课", "学习", "考试", "开会", "加班", "赶", "通勤", "车里")
+DEFAULT_IDLE_WORDS = ("闲", "空", "休息", "放松", "发呆", "散步", "咖啡", "茶", "听歌", "躺", "阳台", "夜")
 BIAS_MIN, BIAS_MAX = 0.35, 1.60
+STATE_BIAS = [(BIAS_MIN, DEFAULT_BUSY_WORDS), (BIAS_MAX, DEFAULT_IDLE_WORDS)]
 PROB_CAP = 0.90
 
 
@@ -38,12 +38,40 @@ def _section(config, name: str) -> dict:
     return v if isinstance(v, dict) else {}
 
 
-def state_bias(st) -> float:
+def _word_list(raw, default: tuple) -> tuple:
+    """逗号分隔的关键词表；空或全空则回退默认。"""
+    items = tuple(w.strip() for w in str(raw or "").split(",") if w.strip())
+    return items or default
+
+
+def _float(raw, default: float) -> float:
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+def bias_table(config=None) -> list:
+    """(倍数, 关键词) 表。可由 scheduler 分组配置覆盖：倍数、词表都能改。"""
+    sec = _section(config or {}, "scheduler")
+    return [
+        (
+            _float(sec.get("bias_busy_factor"), BIAS_MIN),
+            _word_list(sec.get("bias_busy_keywords"), DEFAULT_BUSY_WORDS),
+        ),
+        (
+            _float(sec.get("bias_idle_factor"), BIAS_MAX),
+            _word_list(sec.get("bias_idle_keywords"), DEFAULT_IDLE_WORDS),
+        ),
+    ]
+
+
+def state_bias(st, config=None) -> float:
     """按当前状态给触发概率一个倍数。没状态信息就 1.0。"""
     if st is None:
         return 1.0
     text = f"{getattr(st, 'scene', '')}{getattr(st, 'state', '')}"
-    for factor, words in STATE_BIAS:
+    for factor, words in bias_table(config):
         if any(w in text for w in words):
             return factor
     return 1.0
@@ -94,7 +122,7 @@ class LifeScheduler:
             return
 
         prob = float(_section(self.config, "scheduler").get("act_probability", 0.15))
-        factor = state_bias(st) if _section(self.config, "scheduler").get("state_bias", True) else 1.0
+        factor = state_bias(st, self.config) if _section(self.config, "scheduler").get("state_bias", True) else 1.0
         prob = min(PROB_CAP, max(0.0, prob * factor))
         if random.random() > prob:
             return
@@ -145,7 +173,7 @@ class LifeScheduler:
         moment = _section(self.config, "moment")
         base = float(sch.get("act_probability", 0.15))
         if sch.get("state_bias", True):
-            factor = state_bias(st)
+            factor = state_bias(st, self.config)
             eff = min(PROB_CAP, max(0.0, base * factor))
             prob_line = f"触发概率：{base} × 状态 {factor} → {eff:.2f}"
         else:
