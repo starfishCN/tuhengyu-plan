@@ -23,7 +23,7 @@ from astrbot.api.web import error_response, json_response, request as web_reques
 
 from .core.persona import resolve_persona
 from .core.scheduler import LifeScheduler
-from .core.stickers import read_base64, save_collected
+from .core.stickers import read_base64, save_collected, thumb_b64
 
 # Web API 路由必须以插件名为前缀（AstrBot 约定，2026-10-01 核对官方文档）。
 PLUGIN_NAME = "astrbot_plugin_tuhengyu"
@@ -315,8 +315,9 @@ class TuhengyuPlugin(Star):
         except Exception as e:
             return error_response(f"读取表情包失败：{e}", status_code=500)
 
-        max_item = 800 * 1024  # 单张超过则不内联预览
-        max_total = 6 * 1024 * 1024  # 内联总量上限
+        max_item = 800 * 1024  # 原图直接内联的上限（缩略不可用时的回退）
+        max_total = 24 * 1024 * 1024  # 内联总量上限
+        max_src = 20 * 1024 * 1024  # 超过此大小的原图不尝试生成缩略
         total = 0
         truncated = False
         out = []
@@ -329,10 +330,27 @@ class TuhengyuPlugin(Star):
                 except OSError:
                     continue
                 item = {"name": p.name, "size": size}
-                if size <= max_item and total + size <= max_total:
-                    b64 = read_base64(p)
-                    if b64:
-                        item["b64"] = b64
+                if total >= max_total:
+                    item["skipped"] = True
+                    truncated = True
+                    images.append(item)
+                    continue
+                # ① 优先缩略图（大多数图都能看，且响应小）
+                thumb = thumb_b64(p) if size <= max_src else None
+                if thumb:
+                    b64, w, h = thumb
+                    item["b64"] = b64
+                    item["thumb"] = True
+                    item["w"] = w
+                    item["h"] = h
+                    total += int(len(b64) * 0.75)
+                    images.append(item)
+                    continue
+                # ② 回退：小图直接内联原图
+                if size <= max_item:
+                    raw = read_base64(p)
+                    if raw:
+                        item["b64"] = raw
                         total += size
                     else:
                         item["error"] = "读取失败"

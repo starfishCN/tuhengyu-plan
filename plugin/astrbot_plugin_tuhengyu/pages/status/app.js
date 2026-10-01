@@ -268,7 +268,9 @@ function stickerCard(img) {
     card.appendChild(ph);
   }
   const cap = document.createElement("figcaption");
-  cap.textContent = img.name + " · " + fmtSize(img.size);
+  let label = img.name + " · " + fmtSize(img.size);
+  if (img.thumb) label += " · 缩略";
+  cap.textContent = label;
   card.appendChild(cap);
   return card;
 }

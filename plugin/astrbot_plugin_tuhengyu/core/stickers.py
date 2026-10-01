@@ -102,6 +102,39 @@ def read_base64(path: Path) -> str | None:
         return None
 
 
+def thumb_b64(path: Path, max_side: int = 320, quality: int = 80):
+    """生成缩略图并返回 (base64, 宽, 高)；失败或没有 Pillow 时返回 None。
+
+    用于插件页预览：原图动辄几百 KB～几 MB，直接内联会让响应过大；
+    缩略到 max_side 后通常只剩几十 KB。
+    """
+    try:
+        import base64
+        import io
+
+        from PIL import Image as _Image
+    except Exception:
+        return None
+    try:
+        with _Image.open(path) as im:
+            im.seek(0)  # GIF 取第一帧
+            # 统一转 RGB 存 JPEG（透明填白底）—— 远小于 PNG，适合预览
+            if im.mode in ("RGBA", "LA", "P"):
+                rgba = im.convert("RGBA")
+                work = _Image.new("RGB", rgba.size, (255, 255, 255))
+                work.paste(rgba, mask=rgba.split()[-1])
+            else:
+                work = im.convert("RGB")
+            work.thumbnail((max_side, max_side))
+            w, h = work.size
+            buf = io.BytesIO()
+            work.save(buf, format="JPEG", quality=quality, optimize=True)
+        return base64.b64encode(buf.getvalue()).decode(), w, h
+    except Exception as e:
+        logger.warning(f"[图恒宇] 生成缩略图失败：{e}")
+        return None
+
+
 def save_collected(
     dest_root,
     src_path,
