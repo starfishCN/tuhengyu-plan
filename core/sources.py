@@ -1,0 +1,69 @@
+"""镜像源 / 加速源：候选列表 + 测速 + 自动选最优。
+
+⚠️ 可用性声明（重要）：
+  下面列表来自公开常见列表，**未逐一实测**。国内公共 Docker 镜像加速在
+  2024 年 6 月前后曾大面积停服，列表里可能有已失效项。
+  所以本模块的定位是"给候选、让实测决定"，不是"保证可用"。
+  以面板每次测速的结果为准；失效的源请在列表里删掉或补上新源。
+"""
+import asyncio
+import time
+
+import httpx
+
+# ---------- 候选：Docker 镜像加速 ----------
+DOCKER_MIRRORS = [
+    {"name": "DaoCloud", "url": "https://docker.m.daocloud.io"},
+    {"name": "南京大学", "url": "https://docker.nju.edu.cn"},
+    {"name": "中科大", "url": "https://docker.mirrors.ustc.edu.cn"},
+    {"name": "网易", "url": "https://hub-mirror.c.163.com"},
+    {"name": "阿里云（需填个人地址）", "url": ""},
+]
+
+# ---------- 候选：GitHub 加速 / 代理 ----------
+GITHUB_PROXIES = [
+    {"name": "ghproxy", "prefix": "https://ghproxy.com/"},
+    {"name": "gh-proxy", "prefix": "https://gh-proxy.com/"},
+    {"name": "gitmirror", "prefix": "https://raw.gitmirror.com/"},
+]
+
+# ---------- 测速目标 ----------
+DOCKER_PROBE = "/v2/"
+GITHUB_PROBE = "https://raw.githubusercontent.com/SnowLuma/SnowLuma.Docker.Framework/main/install.sh"
+
+
+def docker_mirror_url(item: dict) -> str:
+    return item["url"].rstrip("/") + DOCKER_PROBE
+
+
+def github_proxy_url_of(item: dict) -> str:
+    target = GITHUB_PROBE.replace("https://", "")
+    return item["prefix"] + target
+
+
+async def _probe(url: str, timeout: float = 6.0) -> dict:
+    t0 = time.perf_counter()
+    try:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as c:
+            r = await c.get(url)
+        ms = round((time.perf_counter() - t0) * 1000)
+        return {"ok": r.status_code < 500, "ms": ms, "status": r.status_code}
+    except Exception as e:
+        return {"ok": False, "ms": None, "err": type(e).__name__}
+
+
+async def test_all(items, url_of, timeout: float = 6.0) -> list:
+    """并发测所有候选，返回 [{**item, 'result': {...}}]。"""
+
+    async def one(it):
+        return {**it, "result": await _probe(url_of(it), timeout)}
+
+    return list(await asyncio.gather(*[one(it) for it in items]))
+
+
+def pick_best(results: list):
+    """选延迟最低的可用项；全不可用返回 None。"""
+    ok = [r for r in results if r["result"]["ok"] and r["result"]["ms"] is not None]
+    if not ok:
+        return None
+    return min(ok, key=lambda r: r["result"]["ms"])
