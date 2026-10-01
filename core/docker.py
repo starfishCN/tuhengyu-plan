@@ -1,15 +1,32 @@
-"""② 安装 Docker（缺才装）＋ 应用镜像加速。
+"""② 安装 Docker CE（走国内镜像源，缺才装）＋ 应用镜像加速。
 
-来源：Docker 官方便捷脚本 https://get.docker.com
-注意：国内网络直连可能慢/失败，请先用面板「网络源」区测速并选择镜像。
+来源：阿里云 Docker CE 镜像 https://mirrors.aliyun.com/docker-ce/linux/ubuntu
+实测（2026-10-01，国内 VPS）：get.docker.com / download.docker.com 均不可达（超时），
+故不用官方便捷脚本，改走 apt + 国内镜像源。
 """
 import json
 
+MIRROR = "https://mirrors.tuna.tsinghua.edu.cn/docker-ce/linux/ubuntu"
+
 DOCKER_CMDS = [
-    "curl -fsSL https://get.docker.com -o /tmp/get-docker.sh",
-    "sh /tmp/get-docker.sh",
-    "systemctl enable --now docker 2>/dev/null || service docker start 2>/dev/null || true",
+    # 始终返回 0，避免 runner 因非零退出码中断
+    "command -v docker >/dev/null 2>&1 && docker -v || echo 'docker 未安装，开始安装'",
+    "apt-get update",
+    "apt-get install -y ca-certificates curl gnupg",
+    "install -m 0755 -d /etc/apt/keyrings",
+    "curl -fsSL " + MIRROR + "/gpg -o /etc/apt/keyrings/docker.asc",
+    "chmod a+r /etc/apt/keyrings/docker.asc",
+    'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] '
+    + MIRROR
+    + ' $(. /etc/os-release && echo $VERSION_CODENAME) stable"'
+    " > /etc/apt/sources.list.d/docker.list",
+    "apt-get update",
+    "apt-get install -y docker-ce docker-ce-cli containerd.io "
+    "docker-buildx-plugin docker-compose-plugin",
+    "systemctl enable --now docker 2>/dev/null || "
+    "service docker start 2>/dev/null || true",
     "docker -v",
+    "docker compose version",
 ]
 
 

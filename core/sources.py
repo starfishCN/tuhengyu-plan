@@ -21,10 +21,12 @@ DOCKER_MIRRORS = [
 ]
 
 # ---------- 候选：GitHub 加速 / 代理 ----------
+# 用 SnowLuma 官方 install.sh 实际会尝试的那几个，测速结果才有参考价值。
+# 注意：③ 安装 SnowLuma 已改为「内置脚本」，不依赖这些代理；本列表仅作备用/诊断。
 GITHUB_PROXIES = [
-    {"name": "ghproxy", "prefix": "https://ghproxy.com/"},
-    {"name": "gh-proxy", "prefix": "https://gh-proxy.com/"},
-    {"name": "gitmirror", "prefix": "https://raw.gitmirror.com/"},
+    {"name": "ghfast.top", "prefix": "https://ghfast.top/"},
+    {"name": "gh-proxy.com", "prefix": "https://gh-proxy.com/"},
+    {"name": "gh.llkk.cc", "prefix": "https://gh.llkk.cc/"},
 ]
 
 # ---------- 测速目标 ----------

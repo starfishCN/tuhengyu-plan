@@ -6,8 +6,11 @@
 注意：NiceGUI / httpx 的 API 以你安装的版本为准。
 """
 import asyncio
+import base64
+import os
 
-from nicegui import ui
+from nicegui import app, ui
+from fastapi.responses import Response as _Resp
 
 from core.runner import run_stream_all
 from core.check import CHECK_CMDS
@@ -70,14 +73,16 @@ def source_section():
     ui.markdown("#### 网络源（镜像加速 / GitHub 加速）")
     ui.markdown(
         "国内直连 docker / github 常常不通。点测速，面板会并发测所有候选，"
-        "自动选延迟最低的可用线路。\n\n"
+        "自动预选延迟最低的可用线路；**也可以手动点选**。\n\n"
         "⚠️ 候选来自公开列表，**未逐一实测**；国内公共 Docker 镜像曾大面积停服，"
         "**以每次测速结果为准**。失效项请在 `core/sources.py` 里增删。"
     )
-    mirror_status = ui.label("镜像加速：未选")
+    mirror_status = ui.label("镜像加速：未选（先测速，再点选）")
     proxy_status = ui.label("GitHub 加速：未选")
-    mirror_list = ui.column()
-    proxy_list = ui.column()
+
+    # 可手动点选的单选组；测速后自动填选项并预选最优
+    mirror_select = ui.radio({}, value=None)
+    proxy_select = ui.radio({}, value=None)
 
     async def speedtest():
         if not _guard():
@@ -90,38 +95,43 @@ def source_section():
             )
             best_m, best_p = sources.pick_best(m), sources.pick_best(p)
             STATE["mirror"], STATE["proxy"] = best_m, best_p
-
-            mirror_list.clear()
-            proxy_list.clear()
             key = lambda r: (not r["result"]["ok"], r["result"]["ms"] or 9e9)
-            with mirror_list:
-                for r in sorted(m, key=key):
-                    ui.label(f"{r['name']} —— {_fmt(r)}")
-            with proxy_list:
-                for r in sorted(p, key=key):
-                    ui.label(f"{r['name']} —— {_fmt(r)}")
+
+            mirror_select.options = {
+                r["url"]: f"{r['name']} —— {_fmt(r)}" for r in sorted(m, key=key)
+            }
+            mirror_select.value = best_m["url"] if best_m else None
+            mirror_select.update()
+
+            proxy_select.options = {
+                r["prefix"]: f"{r['name']} —— {_fmt(r)}" for r in sorted(p, key=key)
+            }
+            proxy_select.value = best_p["prefix"] if best_p else None
+            proxy_select.update()
 
             mirror_status.text = f"镜像加速：{best_m['name'] if best_m else '无可用'}"
             proxy_status.text = f"GitHub 加速：{best_p['name'] if best_p else '无可用'}"
-            ui.notify("测速完成")
+            ui.notify("测速完成，可手动改选")
         finally:
             STATE["busy"] = False
             LOG.push("===== 源测速 结束 =====")
 
     ui.button("一键测速并自动选优", on_click=speedtest)
 
+    ui.label("↓ 点一下选中要用的镜像（测速后可改）")
+    mirror_select
+    proxy_select
+
     async def apply_mirror():
-        if not STATE["mirror"]:
-            ui.notify("请先测速", type="warning")
+        url = mirror_select.value
+        if not url:
+            ui.notify("请先测速，并点选一个镜像源", type="warning")
             return
         if not _guard():
             return
-        await _run("应用 Docker 镜像加速", apply_mirror_cmds(STATE["mirror"]["url"]))
+        await _run("应用 Docker 镜像加速", apply_mirror_cmds(url))
 
     ui.button("应用选中的镜像加速（写 daemon.json 并重启 Docker）", on_click=apply_mirror)
-    ui.separator()
-    mirror_list
-    proxy_list
 
 
 @ui.page("/")
@@ -149,6 +159,27 @@ def index():
         source_section()
 
     LOG = ui.log(max_lines=4000).classes("w-full h-96")
+
+
+# ---------- 认证：面板能执行命令，公网暴露前必须挡一道 ----------
+PANEL_USER = os.environ.get("PANEL_USER", "admin")
+PANEL_PASS = os.environ.get("PANEL_PASS", "")
+
+
+@app.middleware("http")
+async def _basic_auth(request, call_next):
+    # 没设密码就不拦（本地/内网调试用）；设了就必须带 Basic 认证
+    if not PANEL_PASS:
+        return await call_next(request)
+    expected = "Basic " + base64.b64encode(
+        f"{PANEL_USER}:{PANEL_PASS}".encode()
+    ).decode()
+    if request.headers.get("authorization") != expected:
+        return _Resp(
+            status_code=401,
+            headers={"WWW-Authenticate": 'Basic realm="tuhengyu"'},
+        )
+    return await call_next(request)
 
 
 ui.run(host="0.0.0.0", port=8080, title="图恒宇计划", reload=False)

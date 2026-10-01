@@ -1,0 +1,17 @@
+[Unit]
+Description=Tuhengyu Plan Panel (NiceGUI)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/tuhengyu-panel
+Environment=PANEL_USER=admin
+Environment=PANEL_PASS=Tuhengyu2026
+ExecStart=/opt/tuhengyu-panel/.venv/bin/python main.py
+Restart=always
+RestartSec=3
+StandardOutput=append:/var/log/tuhengyu-panel.log
+StandardError=append:/var/log/tuhengyu-panel.log
+
+[Install]
+WantedBy=multi-user.target
