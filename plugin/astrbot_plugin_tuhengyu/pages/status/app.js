@@ -256,23 +256,15 @@ function fmtSize(n) {
 function stickerCard(img) {
   const card = document.createElement("figure");
   card.className = "sticker-card";
-  card.draggable = true;
   card.dataset.name = img.name || "";
   card.dataset.tag = img.tag || "";
-  card.title = "拖到别的分类即可归类";
-  card.addEventListener("dragstart", (e) => {
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData(
-      "text/plain",
-      JSON.stringify({ name: card.dataset.name, from: card.dataset.tag }),
-    );
-    card.classList.add("dragging");
-  });
-  card.addEventListener("dragend", () => card.classList.remove("dragging"));
+  card.title = "按住拖到别的分类即可归类";
+  card.addEventListener("pointerdown", (e) => beginDrag(card, e));
   if (img.b64) {
     const el = document.createElement("img");
     el.loading = "lazy";
     el.alt = img.name;
+    el.draggable = false;
     el.src = "data:" + mimeOf(img.name) + ";base64," + img.b64;
     card.appendChild(el);
   } else {
@@ -323,51 +315,98 @@ function renderStickers(data) {
       grid.appendChild(stickerCard(img));
     }
     sec.appendChild(grid);
-    bindDropZone(sec, g);
+    sec.dataset.drop = g.drop || g.label;
+    sec.dataset.label = g.label;
     box.appendChild(sec);
   }
 }
 
-// 把一个分类区块变成拖拽落点：卡片拖进来 = 移进该分类的目录
-function bindDropZone(sec, group) {
-  const target = group.drop || group.label;
-  sec.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    sec.classList.add("drop-hover");
-  });
-  sec.addEventListener("dragleave", (e) => {
-    if (e.target === sec || !sec.contains(e.relatedTarget)) {
-      sec.classList.remove("drop-hover");
-    }
-  });
-  sec.addEventListener("drop", async (e) => {
-    e.preventDefault();
-    sec.classList.remove("drop-hover");
-    let payload;
-    try {
-      payload = JSON.parse(e.dataTransfer.getData("text/plain") || "{}");
-    } catch (_) {
-      return;
-    }
-    const name = payload.name;
-    const from = payload.from || "";
-    if (!name) return;
-    if (from === target) {
-      setStickerResult("这张图已经在这个分类里了。", false);
-      return;
-    }
-    try {
-      setStickerResult("正在把 " + name + " 移到「" + group.label + "」…", false);
-      const d = await bridge.apiPost("sticker-move", { name, from, to: target });
+// ==================== 表情包：手动拖拽归类（指针实现，触屏 / WebView 通用） ====================
+// 不用 HTML5 原生拖放：它在触屏与多数 WebView 里不触发 drop。
+// 改为 pointerdown → 移动超过阈值后生成跟随指针的浮层 → 松手时按落点命中分类。
+
+let dragState = null;
+let dragGhost = null;
+
+function beginDrag(card, ev) {
+  if (ev.button !== undefined && ev.button !== 0) return;
+  dragState = {
+    name: card.dataset.name || "",
+    from: card.dataset.tag || "",
+    card,
+    startX: ev.clientX,
+    startY: ev.clientY,
+    active: false,
+    target: null,
+  };
+}
+
+function moveDrag(ev) {
+  const st = dragState;
+  if (!st) return;
+  if (!st.active) {
+    if (Math.hypot(ev.clientX - st.startX, ev.clientY - st.startY) < 8) return;
+    st.active = true;
+    st.card.classList.add("dragging");
+    document.body.classList.add("drag-active");
+    const src = st.card.querySelector("img");
+    dragGhost = document.createElement("img");
+    dragGhost.className = "drag-ghost";
+    if (src) dragGhost.src = src.src;
+    document.body.appendChild(dragGhost);
+  }
+  if (ev.cancelable) ev.preventDefault();
+  if (dragGhost) {
+    dragGhost.style.left = ev.clientX + "px";
+    dragGhost.style.top = ev.clientY + "px";
+  }
+  const el = document.elementFromPoint(ev.clientX, ev.clientY);
+  const sec = el && el.closest ? el.closest(".gallery-group") : null;
+  if (sec !== st.target) {
+    if (st.target) st.target.classList.remove("drop-hover");
+    st.target = sec;
+    if (sec) sec.classList.add("drop-hover");
+  }
+}
+
+function endDrag() {
+  const st = dragState;
+  if (!st) return;
+  const sec = st.target;
+  st.card.classList.remove("dragging");
+  if (dragGhost) {
+    dragGhost.remove();
+    dragGhost = null;
+  }
+  document.body.classList.remove("drag-active");
+  if (sec) sec.classList.remove("drop-hover");
+  dragState = null;
+  if (!st.active) return; // 只是点击，不是拖动
+  if (!sec) {
+    setStickerResult("没有落到分类上，已取消。", false);
+    return;
+  }
+  const to = sec.dataset.drop || "";
+  const label = sec.dataset.label || to;
+  if (!to) return;
+  if (st.from === to) {
+    setStickerResult("这张图已经在这个分类里了。", false);
+    return;
+  }
+  setStickerResult("正在把 " + st.name + " 移到「" + label + "」…", false);
+  bridge
+    .apiPost("sticker-move", { name: st.name, from: st.from, to })
+    .then((d) => {
       setStickerResult((d && d.message) || "已移动。", false);
       stickersLoaded = false;
-      await loadStickers(true);
-    } catch (err) {
-      setStickerResult("移动失败：" + err.message, true);
-    }
-  });
+      return loadStickers(true);
+    })
+    .catch((err) => setStickerResult("移动失败：" + err.message, true));
 }
+
+window.addEventListener("pointermove", moveDrag, { passive: false });
+window.addEventListener("pointerup", endDrag);
+window.addEventListener("pointercancel", endDrag);
 
 let stickersLoaded = false;
 
