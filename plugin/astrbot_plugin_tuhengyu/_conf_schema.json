@@ -294,5 +294,67 @@
         "default": ""
       }
     }
+  },
+  "proactive": {
+    "type": "object",
+    "description": "[主动插话] 群聊里偶尔接一句群友的话",
+    "hint": "醒着的时候，极低概率在群里插一句，接最近的群聊。像普通成员那样说话，不区分冷场/热聊。防刷屏靠冷却 + 每群每日上限，一次循环最多发一句。默认关闭，确认行为合适再打开。",
+    "items": {
+      "enabled": {
+        "type": "bool",
+        "description": "启用主动插话",
+        "hint": "关闭时也不记录群聊内容。默认关。",
+        "default": false
+      },
+      "probability": {
+        "type": "float",
+        "description": "每次调度检查时插话的概率（0-1）",
+        "hint": "极低为宜。默认 0.05。注意这是「醒来且群里正聊」的前提下再乘一次。",
+        "default": 0.05
+      },
+      "hot_window_minutes": {
+        "type": "int",
+        "description": "「群里正聊着」的时间窗（分钟）",
+        "hint": "默认 10：最近 10 分钟内有下面的条数才算聊着。",
+        "default": 10
+      },
+      "min_recent_messages": {
+        "type": "int",
+        "description": "时间窗内至少有几条消息才算聊着",
+        "hint": "默认 3。",
+        "default": 3
+      },
+      "cooldown_minutes": {
+        "type": "int",
+        "description": "同一个群的插话冷却（分钟）",
+        "hint": "默认 30。",
+        "default": 30
+      },
+      "daily_cap_per_group": {
+        "type": "int",
+        "description": "每个群每天最多插几句",
+        "hint": "默认 8。设 0 表示不限。",
+        "default": 8
+      },
+      "max_chars": {
+        "type": "int",
+        "description": "插话最长字数",
+        "hint": "默认 20。",
+        "default": 20
+      },
+      "groups": {
+        "type": "text",
+        "description": "只在这些群插话（群号，逗号分隔）",
+        "hint": "留空 = 所有它收到过消息的群。多个群号用英文或中文逗号分隔。",
+        "default": ""
+      },
+      "model": {
+        "type": "string",
+        "description": "生成插话用的模型",
+        "hint": "留空则用 AstrBot 当前默认模型。",
+        "_special": "select_provider",
+        "default": ""
+      }
+    }
   }
 }

@@ -92,6 +92,13 @@ class LifeScheduler:
         self.persona_text = ""
         self.persona_label = ""
         self.persona_name = ""
+        # 附加行动：由 main.py 注册（主动插话等），有自己的概率与冷却。
+        self._extra_actions = []
+
+    def add_action(self, fn) -> None:
+        """注册一个附加行动：每个 tick 都会被调用一次（与 act 的概率无关）。"""
+        if callable(fn) and fn not in self._extra_actions:
+            self._extra_actions.append(fn)
 
     def set_persona(self, text: str, label: str = "", name: str = "") -> None:
         """下发当前人设，并同步给作息（作息按人设指纹判断是否要重算）。"""
@@ -147,6 +154,12 @@ class LifeScheduler:
         if not st.awake:
             return
         await self.act(now, st)
+        # 附加行动（主动插话等）：各自带概率与上限，不叠加 act_probability。
+        for fn in list(self._extra_actions):
+            try:
+                await fn(now, st)
+            except Exception as e:
+                logger.warning(f"[图恒宇] 附加行动失败：{e}")
 
     async def act(self, now: datetime, st=None):
         """决定并执行一次行动。

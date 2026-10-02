@@ -27,6 +27,7 @@ from .core.favour import FavourStore, build_injection, parse_state_marker
 from .core.intent import FALLBACK as INTENT_FALLBACK
 from .core.intent import labels as intent_labels
 from .core.persona import resolve_persona
+from .core.proactive import build_proactive_prompt, decide_proactive
 from .core.poke import IGNORE as POKE_IGNORE
 from .core.poke import build_poke_prompt, decide as decide_poke, fallback_text
 from .core.scheduler import LifeScheduler
@@ -47,6 +48,8 @@ class TuhengyuPlugin(Star):
         self._bridge_obj = None  # OneBot 桥（回戳用 send_poke 动作）
         self._tok_last = None  # 最近一次 LLM 请求的构成快照（token 诊断用）
         self._tok_stats = self._tok_load()  # 今日请求 / token 累计（存盘）
+        self._groups = {}  # 群聊观察：gid → {msgs, last_spoke, day, count}
+        self._proactive_load()  # 读回每群的冷却 / 今日计数
         # 注册插件页面的后端 API（页面在 pages/status/）。
         try:
             context.register_web_api(
@@ -121,6 +124,7 @@ class TuhengyuPlugin(Star):
         self._scheduler = LifeScheduler(self.context, self.config, self._data_dir())
         await self._refresh_persona()  # 先解析人设，作息生成依赖它
         await self._scheduler.setup()  # 生成 / 读取作息（失败会兜底，不抛）
+        self._scheduler.add_action(self._maybe_proactive)  # 主动插话挂到调度器
         self._task = asyncio.create_task(self._scheduler.run(), name="tuhengyu_scheduler")
         self.logger.info("[图恒宇] 生活调度器已启动。")
 
@@ -525,6 +529,232 @@ class TuhengyuPlugin(Star):
             text = fallback_text(reaction, favour=favour, awake=awake, group=group)
         if text:
             yield event.plain_result(text)
+
+    # ---------- 群聊主动插话 ----------
+    def _proactive_cfg(self) -> dict:
+        sec = self.config.get("proactive") if isinstance(self.config, dict) else None
+        return sec if isinstance(sec, dict) else {}
+
+    def _proactive_path(self) -> str:
+        import os
+
+        return os.path.join(self._data_dir(), "proactive.json")
+
+    def _proactive_load(self) -> None:
+        """读回每群的冷却 / 今日计数（群聊内容本身不落盘）。"""
+        import json
+        import os
+
+        self._groups = {}
+        try:
+            if not os.path.exists(self._proactive_path()):
+                return
+            with open(self._proactive_path(), encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                for gid, d in data.items():
+                    d = d if isinstance(d, dict) else {}
+                    self._groups[str(gid)] = {
+                        "msgs": [],
+                        "last_spoke": float(d.get("last_spoke") or 0),
+                        "day": str(d.get("day") or ""),
+                        "count": int(d.get("count") or 0),
+                    }
+        except Exception as e:
+            self.logger.debug(f"[图恒宇] 读主动发言状态失败：{e}")
+
+    def _proactive_save(self) -> None:
+        import json
+
+        try:
+            data = {
+                gid: {
+                    "last_spoke": g.get("last_spoke", 0),
+                    "day": g.get("day", ""),
+                    "count": g.get("count", 0),
+                }
+                for gid, g in self._groups.items()
+            }
+            with open(self._proactive_path(), "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
+        except Exception as e:
+            self.logger.debug(f"[图恒宇] 写主动发言状态失败：{e}")
+
+    @filter.event_message_type(EventMessageType.ALL)
+    async def watch_group(self, event: AstrMessageEvent):
+        """记住群里最近说了什么，供主动插话接话用。只记群聊、只记文字。"""
+        sec = self._proactive_cfg()
+        if not sec.get("enabled", False):
+            return
+        try:
+            if event.is_private_chat():
+                return
+        except Exception:
+            return
+        try:
+            gid = str(event.get_group_id() or "")
+        except Exception:
+            gid = ""
+        if not gid:
+            return
+        try:
+            text = str(event.message_str or "").strip()
+        except Exception:
+            text = ""
+        if not text:
+            return
+        import time as _time
+
+        now = _time.time()
+        try:
+            sender = str(event.get_sender_name() or "") or str(event.get_sender_id() or "")
+        except Exception:
+            sender = ""
+        g = self._groups.setdefault(
+            gid, {"msgs": [], "last_spoke": 0.0, "day": "", "count": 0}
+        )
+        msgs = g["msgs"]
+        msgs.append([now, sender, text[:60]])
+        del msgs[:-20]  # 只留最近 20 条
+        cutoff = now - 1800  # 半小时前的丢掉，别拿旧话题硬接
+        while msgs and msgs[0][0] < cutoff:
+            msgs.pop(0)
+
+    async def _proactive_text(self, recent: list, st, max_chars: int, sec: dict) -> str:
+        """让模型按人设接一句。拿不到模型返回空串。"""
+        try:
+            persona, _label, _name = await resolve_persona(self.context, self.config)
+        except Exception:
+            persona = ""
+        persona = persona or str(self.config.get("persona_prompt", "") or "")
+        lines = [f"{m[1]}：{m[2]}" for m in recent][-10:]
+        prompt = build_proactive_prompt(
+            persona=persona,
+            lines=lines,
+            scene=getattr(st, "scene", "") or "",
+            state=getattr(st, "state", "") or "",
+            max_chars=max_chars,
+        )
+        provider = self._pick_provider(sec)
+        if provider is None:
+            self.logger.info("[图恒宇] 主动插话：无可用模型。")
+            return ""
+        try:
+            resp = await provider.text_chat(prompt=prompt)
+            text = (getattr(resp, "completion_text", "") or "").strip().strip('"').strip()
+        except Exception as e:
+            self.logger.warning(f"[图恒宇] 生成插话失败：{e}")
+            return ""
+        if text in ("-", "—", "－", "无", "（无）"):
+            return ""
+        return text[:60]
+
+    async def _maybe_proactive(self, now, st) -> None:
+        """醒着时，偶尔在群里接一句。挂给调度器，每个 tick 跑一次。"""
+        sec = self._proactive_cfg()
+        if not sec.get("enabled", False):
+            return
+        if not getattr(st, "awake", True):
+            return
+        bridge = self._bridge()
+        if bridge is None:
+            return
+        import time as _time
+
+        now_ts = _time.time()
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        def _num(key, default, cast):
+            try:
+                return cast(sec.get(key, default))
+            except (TypeError, ValueError):
+                return default
+
+        prob = _num("probability", 0.05, float)
+        cooldown = _num("cooldown_minutes", 30, float) * 60
+        daily_cap = _num("daily_cap_per_group", 8, int)
+        min_recent = _num("min_recent_messages", 3, int)
+        hot = _num("hot_window_minutes", 10, float) * 60
+        max_chars = _num("max_chars", 20, int)
+        whitelist = [
+            g.strip()
+            for g in str(sec.get("groups", "") or "").replace("，", ",").split(",")
+            if g.strip()
+        ]
+
+        for gid, g in list(self._groups.items()):
+            if not g.get("msgs"):
+                continue
+            if whitelist and gid not in whitelist:
+                continue
+            recent = [m for m in g["msgs"] if now_ts - m[0] <= hot]
+            if len(recent) < min_recent:
+                continue
+            d = decide_proactive(
+                awake=True,
+                cooling=(now_ts - float(g.get("last_spoke") or 0)) < cooldown,
+                daily_count=int(g.get("count") or 0) if g.get("day") == today else 0,
+                daily_cap=daily_cap,
+                recent_count=len(recent),
+                min_recent=min_recent,
+                prob=prob,
+            )
+            if not d.act:
+                continue
+            reply = await self._proactive_text(recent, st, max_chars, sec)
+            if not reply:
+                continue
+            ok = False
+            try:
+                ok = await bridge.call_ok("send_group_msg", group_id=int(gid), message=reply)
+            except Exception as e:
+                self.logger.warning(f"[图恒宇] 主动插话发送异常：{e}")
+            if ok:
+                g["last_spoke"] = now_ts
+                if g.get("day") != today:
+                    g["day"] = today
+                    g["count"] = 0
+                g["count"] = int(g.get("count") or 0) + 1
+                self._proactive_save()
+                self.logger.info(f"[图恒宇] 主动插话（群 {gid}）：{reply[:30]}")
+            else:
+                self.logger.warning("[图恒宇] 主动插话发送失败。")
+            return  # 一次循环最多发一句
+
+    @filter.command("图恒宇插话")
+    async def test_proactive(self, event: AstrMessageEvent):
+        """手动试一次主动插话（忽略概率、冷却与上限），用来验证链路。"""
+        sec = self._proactive_cfg()
+        try:
+            gid = str(event.get_group_id() or "")
+        except Exception:
+            gid = ""
+        if not gid:
+            yield event.plain_result("[图恒宇] 这条指令要在群里用。")
+            return
+        g = self._groups.get(gid)
+        if not g or not g.get("msgs"):
+            yield event.plain_result("[图恒宇] 还没记到本群的聊天，先说两句再试。")
+            return
+        st = self._scheduler.schedule.state_at() if self._scheduler else None
+        try:
+            max_chars = int(sec.get("max_chars", 20))
+        except (TypeError, ValueError):
+            max_chars = 20
+        reply = await self._proactive_text(g["msgs"][-10:], st, max_chars, sec)
+        if not reply:
+            yield event.plain_result("[图恒宇] 没生成出能接的一句。")
+            return
+        bridge = self._bridge()
+        ok = False
+        if bridge is not None:
+            try:
+                ok = await bridge.call_ok("send_group_msg", group_id=int(gid), message=reply)
+            except Exception as e:
+                self.logger.warning(f"[图恒宇] 测试插话发送异常：{e}")
+        yield event.plain_result(
+            f"[图恒宇] 已发送：{reply}" if ok else "[图恒宇] 发送失败，看日志。"
+        )
 
     # ---------- token 诊断 ----------
     # 折算口径：中文 1 token ≈ 2.06 字符（实测 7994 字符 ≈ 3876 token）。
