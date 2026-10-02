@@ -136,6 +136,26 @@ Plugin astrbot_plugin_tuhengyu (0.3.0) by starfishCN
 
 少数情况下需要在人格之外再加一段说明，才填 `persona_prompt`。都没配的话，插件用内置的通用口吻。
 
+## 代码结构（0.3.0 起）
+
+`main.py` 只留生命周期、公共辅助与注册；业务按职责拆成 mixin，主类多继承组装。改一个行为只需开一个文件。
+
+| 文件 | 类 | 内容 |
+|---|---|---|
+| `main.py` | `TuhengyuPlugin` | `__init__`（含 10 个 Web 路由注册）/ `initialize` / `terminate` / `_refresh_persona` / `_data_dir` / `_data_file` / `_sec` |
+| `handlers/sticker.py` | `StickerHandlers` | 附图、单独发、收集 |
+| `handlers/favour.py` | `FavourHandlers` | 好感度注入与回收 |
+| `handlers/poke.py` | `PokeHandlers` | 戳一戳判定、文本、回戳 |
+| `handlers/proactive.py` | `ProactiveHandlers` | 群聊观察、插话判定、状态落盘 |
+| `commands.py` | `CommandHandlers` | 5 个聊天命令 |
+| `web/routes.py` | `WebRoutes` | 10 个页面 API |
+| `web/settings.py` | `SettingsHandlers` | 设置 schema / 取值 / 回落 / 合并 |
+| `diag/token.py` | `TokenHandlers` | token 估算、快照、输出 |
+
+拆法依据 AstrBot 的注册机制：`@filter.*` 装饰器在**模块导入时**注册，`handler_module_path` 取模块名，卸载按 `data.plugins.<插件目录>` 前缀清理 —— 所以把带装饰器的方法放子模块、由主类继承，注册与卸载行为都与单文件时一致。
+
+> 自己加方法时注意相对导入：子目录文件用 `from ..core.x`，根目录文件（`main.py`、`commands.py`）用 `from .core.x`。
+
 ## 原理备注（给好奇的人）
 
 **为什么不能直接用 OneBot 发空间？**
