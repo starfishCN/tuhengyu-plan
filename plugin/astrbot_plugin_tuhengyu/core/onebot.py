@@ -60,6 +60,22 @@ class OneBotBridge:
             logger.warning(f"[图恒宇] OneBot 动作 {action} 失败：{e}")
             return None
 
+    async def call_ok(self, action: str, **params) -> bool:
+        """调一个动作，只要协议端没报错就算成功。
+
+        注意：send_poke 这类动作成功时返回 data 为 null，不能用返回值判成败。
+        """
+        bot = self.bot()
+        if bot is None:
+            logger.warning("[图恒宇] 拿不到 OneBot 客户端，动作 %s 跳过。", action)
+            return False
+        try:
+            await bot.call_action(action, **params)
+            return True
+        except Exception as e:
+            logger.warning(f"[图恒宇] OneBot 动作 {action} 失败：{e}")
+            return False
+
     # ---------- 业务 ----------
     async def fetch_qzone_cookie(self) -> str:
         """取得带空间域鉴权字段的 cookie 字符串。

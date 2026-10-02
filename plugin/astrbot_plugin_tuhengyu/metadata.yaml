@@ -1,7 +1,7 @@
 name: astrbot_plugin_tuhengyu
 display_name: 图恒宇计划
 desc: 给 bot 完整的一生 —— 作息驱动的生活化行动。第一版：调度器 + 发 QQ 空间（内容由模型生成）。人设驱动，独立自研。
-version: 0.2.17
+version: 0.2.18
 author: starfishCN
 repo: https://gitee.com/starfishCN/tuhengyu-plan
 entry: main.py

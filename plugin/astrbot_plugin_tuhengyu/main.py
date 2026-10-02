@@ -358,8 +358,7 @@ class TuhengyuPlugin(Star):
         params = {"user_id": uid}
         if group and group_id:
             params["group_id"] = group_id
-        resp = await bridge.call("send_poke", **params)
-        return resp is not None
+        return await bridge.call_ok("send_poke", **params)
 
     def _poke_touch(self, key: str, now: float, window: float, cooldown: float) -> tuple[int, bool]:
         """记一次戳，返回 (含本次的窗口内次数, 是否在冷却中)。"""
@@ -377,6 +376,7 @@ class TuhengyuPlugin(Star):
             persona = ""
         persona = persona or str(self.config.get("persona_prompt", "") or "")
         if not persona:
+            self.logger.info("[图恒宇] 戳一戳：无人设可用，回落台词池。")
             return ""
         psec = self._poke_cfg()
         prompt = build_poke_prompt(
@@ -388,22 +388,33 @@ class TuhengyuPlugin(Star):
             state=st_state,
             group=group,
         )
+        provider = self._pick_provider(psec)
+        if provider is None:
+            self.logger.info("[图恒宇] 戳一戳：无可用模型，回落台词池。")
+            return ""
         try:
-            from .core.llm import resolve_provider_id
-
-            pid = str(psec.get("model", "") or "").strip()
-            if not pid:
-                pid = await resolve_provider_id(self.context, "")
-            if not pid:
-                return ""
-            resp = await self.context.llm_generate(
-                chat_provider_id=pid, prompt=prompt, system_prompt=persona
-            )
+            resp = await provider.text_chat(prompt=prompt, system_prompt=persona)
             text = (getattr(resp, "completion_text", "") or "").strip().strip('"').strip()
             return text[:60]
         except Exception as e:
             self.logger.warning(f"[图恒宇] 生成戳一戳回应失败：{e}")
             return ""
+
+    def _pick_provider(self, sec: dict):
+        """取一个对话模型实例：优先配置里指定的 id，否则 AstrBot 当前默认。"""
+        pid = str(sec.get("model", "") or "").strip()
+        if pid:
+            try:
+                prov = self.context.get_provider_by_id(pid)
+                if prov is not None:
+                    return prov
+            except Exception as e:
+                self.logger.warning(f"[图恒宇] 取指定模型 {pid} 失败：{e}")
+        try:
+            return self.context.get_using_provider()
+        except Exception as e:
+            self.logger.warning(f"[图恒宇] 取默认模型失败：{e}")
+        return None
 
     @filter.event_message_type(EventMessageType.ALL)
     async def on_poke(self, event: AstrMessageEvent):

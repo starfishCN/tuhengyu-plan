@@ -7,10 +7,10 @@
     睡眠时段（作息里 awake=false）→ 不理
     好感高（关系好）           → 回戳，多数再补一句话
     好感低（反感/敌对）        → 多半不理，偶尔冷一句
-    普通关系                   → 回戳和问一句，抛硬币
+    普通关系                   → 基本都答一句，多数同时回戳
 
 文字部分交给模型（人设驱动）；拿不到模型时退回内置短句，保证有反应。
-回戳走 Poke 消息组件，失败不影响文字。
+回戳走协议端的 send_poke 动作，失败不影响文字。
 """
 from __future__ import annotations
 
@@ -63,7 +63,10 @@ def decide(
         return Reaction(BOTH if r.random() < 0.75 else SILENT_POKE, "关系好")
     if favour < cold_at:
         return Reaction(IGNORE if r.random() < 0.6 else TEXT, "关系差")
-    return Reaction(SILENT_POKE if r.random() < poke_back_prob else TEXT, "普通关系")
+    # 普通关系：基本都答一句（可同时回戳），不静默只戳回去
+    if r.random() < poke_back_prob:
+        return Reaction(BOTH, "普通关系")
+    return Reaction(TEXT, "普通关系")
 
 
 # ---------- 无模型时的回落台词 ----------
