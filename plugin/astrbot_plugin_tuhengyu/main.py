@@ -452,6 +452,14 @@ class TuhengyuPlugin(Star):
         uid = str(event.get_sender_id() or "")
         if not uid:
             return
+        # 协议端会把「bot 自己戳出去」的动作也回传成一条事件，sender 即 bot 自身。
+        # 不拦的话，每次回戳都会多出一条回复（真机实测：一次戳 → 两条，一条带人设一条不带）。
+        try:
+            self_id = str(event.get_self_id() or "")
+        except Exception:
+            self_id = ""
+        if self_id and uid == self_id:
+            return
         try:
             umo = str(event.unified_msg_origin or "")
         except Exception:
