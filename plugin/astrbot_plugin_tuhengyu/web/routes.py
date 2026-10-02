@@ -126,7 +126,15 @@ class WebRoutes:
                     item["skipped"] = True
                     truncated = True
                 images.append(item)
-            out.append({"label": label, "count": len(pairs), "images": images})
+            out.append(
+                {
+                    "label": label,
+                    "count": len(pairs),
+                    "images": images,
+                    # 拖拽落点：内置意图 / 用户分类 = 同名目录；「其他」= default 散图区
+                    "drop": "default" if label == INTENT_FALLBACK else label,
+                }
+            )
 
         return json_response(
             {
@@ -243,6 +251,35 @@ class WebRoutes:
             f"本批 {len(batch)} 张：归类 {moved}，留在「其他」{kept}，失败 {failed}；"
             f"尚有 {remaining} 张未处理"
         )
+        return json_response(data)
+
+    async def page_sticker_move(self):
+        """POST /astrbot_plugin_tuhengyu/sticker-move —— 手动把一张图移到另一个分类。
+
+        body: {"name": 文件名, "from": 来源目录, "to": 目标分类}
+        「表情包」页签里把卡片拖到别的分类上即可触发；本接口是它的后端。
+        与「自动归类」不同，这一步不调模型、零 token，只做文件移动。
+        """
+        if self._scheduler is None:
+            return error_response("调度器未运行（插件可能被禁用）", status_code=409)
+        try:
+            body = await web_request.json({})
+        except Exception:
+            body = {}
+        body = body or {}
+        name = str(body.get("name", "")).strip()
+        src = str(body.get("from", "")).strip()
+        dst = str(body.get("to", "")).strip()
+        if not name or not dst:
+            return error_response("缺少文件名或目标分类", status_code=400)
+        if src and src == dst:
+            return error_response("目标分类与当前相同", status_code=400)
+        ok, msg = self._scheduler.stickers.move_by_name(name, dst, from_label=src)
+        if not ok:
+            return error_response(msg, status_code=400)
+        data = self._scheduler.status_dict()
+        data["running"] = True
+        data["message"] = msg
         return json_response(data)
 
     async def page_settings_get(self):

@@ -114,6 +114,12 @@ class TuhengyuPlugin(StickerHandlers, FavourHandlers, PokeHandlers, ProactiveHan
                 "插件页面：识图自动归类",
             )
             context.register_web_api(
+                f"/{PLUGIN_NAME}/sticker-move",
+                self.page_sticker_move,
+                ["POST"],
+                "插件页面：手动移动表情包分类",
+            )
+            context.register_web_api(
                 f"/{PLUGIN_NAME}/settings",
                 self.page_settings_get,
                 ["GET"],

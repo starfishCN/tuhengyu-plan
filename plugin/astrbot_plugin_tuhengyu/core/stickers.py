@@ -214,6 +214,29 @@ class StickerLibrary:
         self.reload()
         return True, f"已归入「{category}」"
 
+    def find_path(self, name: str, label: str = "") -> Path | None:
+        """在索引里按文件名找一张图；label 非空时限定在该目录下。
+
+        同名文件可能同时存在于多个目录（default 的散图与某分类同名），
+        因此手动拖拽归类时必须带上来源目录（页面上就是这张卡片的 tag）。
+        """
+        name = str(name or "").strip()
+        if not name:
+            return None
+        labels = [label] if label and label in self._index else list(self._index)
+        for lab in labels:
+            for p in self._index.get(lab, []):
+                if p.name == name:
+                    return p
+        return None
+
+    def move_by_name(self, name: str, category: str, from_label: str = "") -> tuple[bool, str]:
+        """按文件名把一张图移到目标分类（WebUI 手动拖拽用）。返回 (是否成功, 说明)。"""
+        src = self.find_path(name, from_label)
+        if src is None:
+            return False, "找不到这张图（可能已被移动，刷新后重试）"
+        return self.move_image(src, category)
+
     # ---------- 挑一张 ----------
     def pick(self, context_text: str = "", prefer_intent: bool = True) -> Path | None:
         """按传入文本挑一张。文本为空则退到 default / 全部随机。

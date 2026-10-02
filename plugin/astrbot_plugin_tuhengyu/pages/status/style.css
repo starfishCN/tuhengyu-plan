@@ -569,3 +569,23 @@ select.set-input {
   font-size: 13px;
   padding: 14px 0;
 }
+
+/* ---------- 表情包：手动拖拽归类 ---------- */
+
+.sticker-card {
+  cursor: grab;
+}
+
+.sticker-card.dragging {
+  opacity: 0.45;
+}
+
+.gallery-group.drop-hover {
+  outline: 2px dashed var(--accent);
+  outline-offset: 4px;
+  border-radius: 10px;
+}
+
+.gallery-group.drop-hover .gallery-head {
+  color: var(--accent);
+}

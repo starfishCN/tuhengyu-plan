@@ -256,6 +256,19 @@ function fmtSize(n) {
 function stickerCard(img) {
   const card = document.createElement("figure");
   card.className = "sticker-card";
+  card.draggable = true;
+  card.dataset.name = img.name || "";
+  card.dataset.tag = img.tag || "";
+  card.title = "拖到别的分类即可归类";
+  card.addEventListener("dragstart", (e) => {
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData(
+      "text/plain",
+      JSON.stringify({ name: card.dataset.name, from: card.dataset.tag }),
+    );
+    card.classList.add("dragging");
+  });
+  card.addEventListener("dragend", () => card.classList.remove("dragging"));
   if (img.b64) {
     const el = document.createElement("img");
     el.loading = "lazy";
@@ -310,8 +323,50 @@ function renderStickers(data) {
       grid.appendChild(stickerCard(img));
     }
     sec.appendChild(grid);
+    bindDropZone(sec, g);
     box.appendChild(sec);
   }
+}
+
+// 把一个分类区块变成拖拽落点：卡片拖进来 = 移进该分类的目录
+function bindDropZone(sec, group) {
+  const target = group.drop || group.label;
+  sec.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    sec.classList.add("drop-hover");
+  });
+  sec.addEventListener("dragleave", (e) => {
+    if (e.target === sec || !sec.contains(e.relatedTarget)) {
+      sec.classList.remove("drop-hover");
+    }
+  });
+  sec.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    sec.classList.remove("drop-hover");
+    let payload;
+    try {
+      payload = JSON.parse(e.dataTransfer.getData("text/plain") || "{}");
+    } catch (_) {
+      return;
+    }
+    const name = payload.name;
+    const from = payload.from || "";
+    if (!name) return;
+    if (from === target) {
+      setStickerResult("这张图已经在这个分类里了。", false);
+      return;
+    }
+    try {
+      setStickerResult("正在把 " + name + " 移到「" + group.label + "」…", false);
+      const d = await bridge.apiPost("sticker-move", { name, from, to: target });
+      setStickerResult((d && d.message) || "已移动。", false);
+      stickersLoaded = false;
+      await loadStickers(true);
+    } catch (err) {
+      setStickerResult("移动失败：" + err.message, true);
+    }
+  });
 }
 
 let stickersLoaded = false;

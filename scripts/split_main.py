@@ -1,7 +1,11 @@
 """把 main.py 的单类按职责拆成 mixin 文件。
 
 机械搬移，不改一行逻辑：只在每个方法块前面加一层 class 壳。
-可重复执行：每次从 archive/main.py-0.2.28.bak 重新拆。
+
+一次性迁移工具：**已执行完毕（0.2.28 → 0.3.0）**。
+它从 archive/main.py-0.2.28.bak 重新拆，所以再跑一次会按那份旧备份
+覆盖 handlers/ web/ diag/ 与 main.py —— 等于把 0.3.0 之后的所有改动回滚。
+默认拒绝重跑；确需重拆请设环境变量 SPLIT_FORCE=1。
 """
 import os
 import re
@@ -220,6 +224,15 @@ def fix_web_settings(root):
 
 def main():
     path = os.path.join(ROOT, "main.py")
+
+    # 一次性迁移工具：0.2.28 → 0.3.0 已完成。再跑会按 0.2.28 备份重新生成，
+    # 等于把 0.3.1+ 的改动全部回滚。默认拒绝，确需重拆才设 SPLIT_FORCE=1。
+    if os.path.exists(os.path.join(ROOT, "handlers")) and os.environ.get("SPLIT_FORCE") != "1":
+        print("已拒绝：检测到已拆分（handlers/ 存在）。")
+        print("本脚本是一次性迁移工具，重跑会按 archive/main.py-0.2.28.bak")
+        print("覆盖现有实现，丢失 0.3.1 之后的改动。")
+        print("确需重拆请设 SPLIT_FORCE=1 再运行。")
+        return
 
     if os.path.exists(BACKUP):
         shutil.copy2(BACKUP, path)

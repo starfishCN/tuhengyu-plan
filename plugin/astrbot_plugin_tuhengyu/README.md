@@ -3,7 +3,7 @@
 给 bot「完整的一生」。让人设不只是「会说话」，而是**有自己的作息、会自己发空间、会发表情包、会怼人、偶尔在群里插一句**。
 
 - 包名：`astrbot_plugin_tuhengyu`
-- 版本：0.3.1
+- 版本：0.3.2
 - 支持平台：`aiocqhttp`（OneBot v11）
 - 许可：待定（见项目 README）
 
@@ -70,7 +70,7 @@ Plugin astrbot_plugin_tuhengyu (0.3.1) by starfishCN
 - **状态**：此刻状态、醒着/睡着、作息来源与段数、当前人设、触发概率（基准 × 状态倍数）、检查间隔、发空间开关、上次发空间时间、作息时段表（当前命中的一行高亮）
 - **操作**：重算作息 / 测试发一条空间动态（二次确认）/ 重扫表情包目录
 - **设置**：直接读写插件配置（与 AstrBot 官方设置页是同一份），下拉可选人格与模型
-- **表情包**：按分类浏览、新建分类、上传图片、一键「自动归类」（调多模态模型把散图归入意图类目）
+- **表情包**：按分类浏览、新建分类、上传图片、一键「自动归类」（调多模态模型把散图归入意图类目）；也能把任意一张卡片**手动拖进**别的分类归类（纯文件移动，零 token）
 
 页面后端 API 由插件自己注册（路由带插件名前缀）：
 
@@ -84,6 +84,7 @@ Plugin astrbot_plugin_tuhengyu (0.3.1) by starfishCN
 | POST | `/astrbot_plugin_tuhengyu/sticker-category` | 新建分类 |
 | POST | `/astrbot_plugin_tuhengyu/sticker-upload` | 上传图片（base64） |
 | POST | `/astrbot_plugin_tuhengyu/sticker-classify` | 识图归类（按批） |
+| POST | `/astrbot_plugin_tuhengyu/sticker-move` | 手动把一张图移到别的分类（拖拽） |
 | GET | `/astrbot_plugin_tuhengyu/settings` | 配置 schema + 当前值 + 下拉选项 |
 | POST | `/astrbot_plugin_tuhengyu/settings` | 保存配置 |
 
@@ -142,7 +143,7 @@ Plugin astrbot_plugin_tuhengyu (0.3.1) by starfishCN
 
 | 文件 | 类 | 内容 |
 |---|---|---|
-| `main.py` | `TuhengyuPlugin` | `__init__`（含 10 个 Web 路由注册）/ `initialize` / `terminate` / `_refresh_persona` / `_data_dir` / `_data_file` / `_sec` |
+| `main.py` | `TuhengyuPlugin` | `__init__`（含 11 个 Web 路由注册）/ `initialize` / `terminate` / `_refresh_persona` / `_data_dir` / `_data_file` / `_sec` |
 | `handlers/sticker.py` | `StickerHandlers` | 附图、单独发、收集 |
 | `handlers/favour.py` | `FavourHandlers` | 好感度注入与回收 |
 | `handlers/poke.py` | `PokeHandlers` | 戳一戳判定、文本、回戳 |
