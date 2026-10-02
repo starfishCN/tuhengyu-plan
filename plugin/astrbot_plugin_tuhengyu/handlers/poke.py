@@ -33,7 +33,7 @@ class PokeHandlers:
         """取 OneBot 桥（懒加载并缓存）。"""
         if self._bridge_obj is None:
             try:
-                from .core.onebot import OneBotBridge
+                from ..core.onebot import OneBotBridge
 
                 self._bridge_obj = OneBotBridge(self.context)
             except Exception as e:

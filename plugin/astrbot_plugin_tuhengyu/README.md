@@ -3,7 +3,7 @@
 给 bot「完整的一生」。让人设不只是「会说话」，而是**有自己的作息、会自己发空间、会发表情包、会怼人、偶尔在群里插一句**。
 
 - 包名：`astrbot_plugin_tuhengyu`
-- 版本：0.3.15
+- 版本：0.3.16
 - 支持平台：`aiocqhttp`（OneBot v11）
 - 许可：AGPL-3.0（见本插件 `LICENSE`；因运行于 AGPL-3.0 的 AstrBot 之上）
 
