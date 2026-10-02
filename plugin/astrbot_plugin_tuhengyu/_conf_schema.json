@@ -220,5 +220,79 @@
         "default": "collected"
       }
     }
+  },
+  "favour": {
+    "type": "object",
+    "description": "[好感度] 三维内心状态（好感 / 印象 / 关系）",
+    "hint": "自研，不接第三方。每轮把当前状态注入 system prompt，模型在回复末尾另起一行写 `%%FAV%% 好感 | 印象 | 关系`，插件整行剥离后落库（用户看不到），语气按好感度区间自动变化。数据存插件数据目录 favour.json。",
+    "items": {
+      "enabled": {
+        "type": "bool",
+        "description": "启用好感度系统",
+        "hint": "关掉则完全不注入、不解析、不落库。",
+        "default": true
+      },
+      "inject": {
+        "type": "bool",
+        "description": "把当前状态注入对话",
+        "hint": "关掉则只保留已有数据，不再影响模型回复。",
+        "default": true
+      },
+      "session_based": {
+        "type": "bool",
+        "description": "每个群 / 私聊独立计算",
+        "hint": "开：同一个用户在不同群里各有一份状态。关（默认）：全局唯一。",
+        "default": false
+      }
+    }
+  },
+  "poke": {
+    "type": "object",
+    "description": "[戳一戳] 被戳时的反应",
+    "hint": "反应跟人设与好感度走：冷却内不理、同一人连戳到阈值怼一句、睡着不理、关系好回戳并说话、普通关系回戳或问一句、关系差多半不理。回戳走 OneBot poke 段，平台不支持时只发文字。",
+    "items": {
+      "enabled": {
+        "type": "bool",
+        "description": "启用戳一戳反应",
+        "default": true
+      },
+      "use_model": {
+        "type": "bool",
+        "description": "文字交给模型生成（贴人设）",
+        "hint": "关掉则只用内置短句（零 token，但机械）。拿不到模型时也会自动回落短句。",
+        "default": true
+      },
+      "cooldown_seconds": {
+        "type": "int",
+        "description": "冷却秒数（同人同会话只应一次）",
+        "hint": "防互戳死循环。默认 30。",
+        "default": 30
+      },
+      "repeat_window_seconds": {
+        "type": "int",
+        "description": "连戳计数窗口（秒）",
+        "hint": "默认 60：60 秒内被同一人戳够阈值就怼。",
+        "default": 60
+      },
+      "snap_threshold": {
+        "type": "int",
+        "description": "连戳阈值（含本次）",
+        "hint": "默认 3。设 0 关闭「连戳怼人」。",
+        "default": 3
+      },
+      "poke_back_prob": {
+        "type": "float",
+        "description": "普通关系下回戳（而不是问一句）的概率（0-1）",
+        "hint": "默认 0.6。",
+        "default": 0.6
+      },
+      "model": {
+        "type": "string",
+        "description": "生成戳一戳回应用的模型",
+        "hint": "留空则用 AstrBot 当前默认模型。",
+        "_special": "select_provider",
+        "default": ""
+      }
+    }
   }
 }

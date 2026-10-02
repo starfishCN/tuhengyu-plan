@@ -17,14 +17,18 @@ from datetime import datetime
 
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.event.filter import EventMessageType
-from astrbot.api.message_components import Image
+from astrbot.api.message_components import Image, Poke
+from astrbot.api.provider import LLMResponse, ProviderRequest
 from astrbot.api.star import Context, Star
 from astrbot.api.web import error_response, json_response, request as web_request
 
 from .core.classify import classify_image
+from .core.favour import FavourStore, build_injection, parse_state_marker
 from .core.intent import FALLBACK as INTENT_FALLBACK
 from .core.intent import labels as intent_labels
 from .core.persona import resolve_persona
+from .core.poke import IGNORE as POKE_IGNORE
+from .core.poke import build_poke_prompt, decide as decide_poke, fallback_text
 from .core.scheduler import LifeScheduler
 from .core.stickers import SYSTEM_LABELS, read_base64, save_collected, thumb_b64
 
@@ -38,6 +42,8 @@ class TuhengyuPlugin(Star):
         self.config = config or {}
         self._scheduler = None
         self._task = None
+        self._favour_store = None
+        self._poke_log = {}  # 戳一戳：键 → [时间戳]，用于连戳计数与冷却
         # 注册插件页面的后端 API（页面在 pages/status/）。
         try:
             context.register_web_api(
@@ -268,6 +274,206 @@ class TuhengyuPlugin(Star):
             self._scheduler.stickers.reload()
             self.logger.info(f"[图恒宇] 对话中收集到 {saved} 张表情包 → {label}/")
 
+    # ---------- 好感度：注入 + 回收 ----------
+    def _favour_cfg(self) -> dict:
+        sec = self.config.get("favour") if isinstance(self.config, dict) else None
+        return sec if isinstance(sec, dict) else {}
+
+    def _favour(self) -> FavourStore:
+        if self._favour_store is None:
+            self._favour_store = FavourStore(self._data_dir())
+        return self._favour_store
+
+    def _scope(self, event: AstrMessageEvent, sec: dict) -> str | None:
+        """会话独立开关；关着返回 None（全局状态）。"""
+        if not sec.get("session_based", False):
+            return None
+        try:
+            return str(event.unified_msg_origin or "") or None
+        except Exception:
+            return None
+
+    @filter.on_llm_request()
+    async def inject_favour(self, event: AstrMessageEvent, req: ProviderRequest):
+        """把当前三维状态与更新指令追加到 system prompt。"""
+        sec = self._favour_cfg()
+        if not sec.get("enabled", True) or not sec.get("inject", True):
+            return
+        try:
+            uid = str(event.get_sender_id() or "")
+            if not uid:
+                return
+            state = self._favour().get(uid, self._scope(event, sec))
+            req.system_prompt = (req.system_prompt or "") + build_injection(state)
+        except Exception as e:
+            self.logger.warning(f"[图恒宇] 注入好感度失败：{e}")
+
+    @filter.on_llm_response()
+    async def collect_favour(self, event: AstrMessageEvent, resp: LLMResponse):
+        """从回复里把状态行整行剥离并落库。缺字段保持原值，不猜。"""
+        sec = self._favour_cfg()
+        if not sec.get("enabled", True):
+            return
+        try:
+            text = resp.completion_text or ""
+            cleaned, patch = parse_state_marker(text)
+            if patch is None:
+                return
+            if cleaned != text:
+                resp.completion_text = cleaned
+            uid = str(event.get_sender_id() or "")
+            if uid:
+                self._favour().update(uid, patch, self._scope(event, sec))
+        except Exception as e:
+            self.logger.warning(f"[图恒宇] 回收好感度失败：{e}")
+
+    # ---------- 戳一戳 ----------
+    def _poke_cfg(self) -> dict:
+        sec = self.config.get("poke") if isinstance(self.config, dict) else None
+        return sec if isinstance(sec, dict) else {}
+
+    def _poke_touch(self, key: str, now: float, window: float, cooldown: float) -> tuple[int, bool]:
+        """记一次戳，返回 (含本次的窗口内次数, 是否在冷却中)。"""
+        prev = [t for t in self._poke_log.get(key, []) if now - t <= max(window, cooldown)]
+        cooling = bool(prev) and (now - prev[-1]) < cooldown
+        prev.append(now)
+        self._poke_log[key] = prev
+        return len(prev), cooling
+
+    async def _poke_text(self, event, reaction, state: dict, scene: str, st_state: str, group: bool) -> str:
+        """让模型按人设回一句。拿不到模型返回空串（调用方回落台词池）。"""
+        try:
+            persona, _label, _name = await resolve_persona(self.context, self.config)
+        except Exception:
+            persona = ""
+        persona = persona or str(self.config.get("persona_prompt", "") or "")
+        if not persona:
+            return ""
+        psec = self._poke_cfg()
+        prompt = build_poke_prompt(
+            kind=reaction.kind,
+            favour=int(state.get("favour", 0) or 0),
+            relationship=str(state.get("relationship", "")),
+            attitude=str(state.get("attitude", "")),
+            scene=scene,
+            state=st_state,
+            group=group,
+        )
+        try:
+            from .core.llm import resolve_provider_id
+
+            pid = str(psec.get("model", "") or "").strip()
+            if not pid:
+                pid = await resolve_provider_id(self.context, "")
+            if not pid:
+                return ""
+            resp = await self.context.llm_generate(
+                chat_provider_id=pid, prompt=prompt, system_prompt=persona
+            )
+            text = (getattr(resp, "completion_text", "") or "").strip().strip('"').strip()
+            return text[:60]
+        except Exception as e:
+            self.logger.warning(f"[图恒宇] 生成戳一戳回应失败：{e}")
+            return ""
+
+    @filter.event_message_type(EventMessageType.ALL)
+    async def on_poke(self, event: AstrMessageEvent):
+        """被戳一下：回戳 / 说一句 / 无视，按人设 + 好感 + 状态 + 频次决定。
+
+        只处理带 Poke 组件的事件，其余消息一律不碰。
+        """
+        sec = self._poke_cfg()
+        if not sec.get("enabled", True):
+            return
+        try:
+            msgs = event.get_messages()
+        except Exception:
+            return
+        if not any(isinstance(m, Poke) for m in msgs):
+            return
+        # 是戳事件：默认 LLM 链路要掐掉（私聊会无条件唤醒它）。
+        try:
+            event.should_call_llm(True)
+        except Exception:
+            pass
+
+        import time as _time
+
+        now = _time.time()
+        uid = str(event.get_sender_id() or "")
+        if not uid:
+            return
+        try:
+            umo = str(event.unified_msg_origin or "")
+        except Exception:
+            umo = ""
+        try:
+            group = not event.is_private_chat()
+        except Exception:
+            group = False
+
+        def _int(key: str, default: int) -> int:
+            try:
+                return int(sec.get(key, default))
+            except (TypeError, ValueError):
+                return default
+
+        cooldown = _int("cooldown_seconds", 30)
+        window = _int("repeat_window_seconds", 60)
+        threshold = _int("snap_threshold", 3)
+        try:
+            prob = float(sec.get("poke_back_prob", 0.6))
+        except (TypeError, ValueError):
+            prob = 0.6
+
+        repeat, cooling = self._poke_touch(f"{umo}:{uid}", now, window, cooldown)
+
+        fsec = self._favour_cfg()
+        if fsec.get("enabled", True):
+            state = self._favour().get(uid, self._scope(event, fsec))
+        else:
+            state = {"favour": 0, "attitude": "中立", "relationship": "陌生人"}
+        favour = int(state.get("favour", 0) or 0)
+
+        awake, scene, st_state = True, "", ""
+        if self._scheduler is not None:
+            try:
+                st = self._scheduler.schedule.state_at()
+                awake = bool(st.awake)
+                scene = st.scene or ""
+                st_state = st.state or ""
+            except Exception:
+                pass
+
+        reaction = decide_poke(
+            favour=favour,
+            awake=awake,
+            repeat=repeat,
+            cooling=cooling,
+            poke_back_prob=prob,
+            snap_threshold=threshold,
+        )
+        if reaction.kind == POKE_IGNORE:
+            return
+
+        if reaction.poke_back():
+            try:
+                from astrbot.api.event import MessageChain
+
+                await event.send(MessageChain([Poke(id=uid)]))
+            except Exception as e:
+                self.logger.warning(f"[图恒宇] 回戳失败（平台可能不吃 poke 段）：{e}")
+
+        if not reaction.speak():
+            return
+        text = ""
+        if sec.get("use_model", True):
+            text = await self._poke_text(event, reaction, state, scene, st_state, group)
+        if not text:
+            text = fallback_text(reaction, favour=favour, awake=awake, group=group)
+        if text:
+            yield event.plain_result(text)
+
     # ---------- 命令 ----------
     async def _publish_once(self) -> dict:
         """生成并发布一条空间动态。命令与插件页面共用同一条路径。"""
@@ -320,6 +526,20 @@ class TuhengyuPlugin(Star):
                 yield event.plain_result(f"[图恒宇] {r.get('message')}")
         except Exception as e:
             yield event.plain_result(f"[图恒宇] 出错：{e}")
+
+    @filter.command("图恒宇好感")
+    async def favour_status(self, event: AstrMessageEvent):
+        """查看自己当前的好感度 / 印象 / 关系（只读）。"""
+        sec = self._favour_cfg()
+        if not sec.get("enabled", True):
+            yield event.plain_result("[图恒宇] 好感度系统未启用。")
+            return
+        uid = str(event.get_sender_id() or "")
+        state = self._favour().get(uid, self._scope(event, sec))
+        yield event.plain_result(
+            f"[图恒宇] 好感度 {state['favour']}｜印象：{state['attitude']}"
+            f"｜关系：{state['relationship']}"
+        )
 
     # ---------- 插件页面 API ----------
     async def page_status(self):
