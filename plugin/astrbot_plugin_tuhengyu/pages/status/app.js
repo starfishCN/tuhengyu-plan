@@ -246,13 +246,6 @@ function mimeOf(name) {
   return STICKER_MIME[ext] || "image/png";
 }
 
-function fmtSize(n) {
-  const v = Number(n) || 0;
-  if (v >= 1024 * 1024) return (v / 1024 / 1024).toFixed(1) + " MB";
-  if (v >= 1024) return (v / 1024).toFixed(0) + " KB";
-  return v + " B";
-}
-
 function stickerCard(img) {
   const card = document.createElement("figure");
   card.className = "sticker-card";
@@ -274,11 +267,7 @@ function stickerCard(img) {
     ph.textContent = img.skipped ? "过大，未预览" : img.error || "无法预览";
     card.appendChild(ph);
   }
-  const cap = document.createElement("figcaption");
-  let label = img.name + " · " + fmtSize(img.size);
-  if (img.thumb) label += " · 缩略";
-  cap.textContent = label;
-  card.appendChild(cap);
+  // 不显示文件名 / 尺寸：对使用者无意义（排障信息在服务端日志）
   return card;
 }
 
