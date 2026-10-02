@@ -23,13 +23,18 @@ from ..core.scheduler import LifeScheduler
 from ..core.stickers import SYSTEM_LABELS, read_base64, save_collected, thumb_b64
 
 
+# 插件根目录 = 本文件目录（web/）的上一级。
+# ⚠️ 本模块在子目录里，取插件内文件必须用这个基准，不能用 __file__ 的 dirname（会落到 web/）。
+PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
 class SettingsHandlers:
 
     # ---------- 插件页面：设置读写 ----------
     def _load_schema(self) -> dict:
-        """读插件同级的 _conf_schema.json（设置页据此渲染控件）。"""
+        """读插件根目录的 _conf_schema.json（设置页据此渲染控件）。"""
 
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_conf_schema.json")
+        path = os.path.join(PLUGIN_ROOT, "_conf_schema.json")
         try:
             with open(path, encoding="utf-8") as f:
                 return json.load(f)

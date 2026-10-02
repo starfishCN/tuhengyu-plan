@@ -197,6 +197,27 @@ def split_blocks(body):
     return order, chunks
 
 
+
+PLUGIN_ROOT_NOTE = (
+    "# 插件根目录 = 本文件目录（web/）的上一级。\n"
+    "# ⚠️ 本模块在子目录里，取插件内文件必须用这个基准，"
+    "不能用 __file__ 的 dirname（会落到 web/）。\n"
+    "PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))\n"
+    "\n\nclass SettingsHandlers:"
+)
+
+
+def fix_web_settings(root):
+    """拆分后修补：子目录模块取插件内文件时，路径基准要回到插件根。"""
+    p = os.path.join(root, "web", "settings.py")
+    s = open(p, encoding="utf-8").read()
+    anchor = 'os.path.dirname(os.path.abspath(__file__)), "_conf_schema.json"'
+    if anchor in s:
+        s = s.replace(anchor, 'PLUGIN_ROOT, "_conf_schema.json"', 1)
+        s = s.replace("class SettingsHandlers:", PLUGIN_ROOT_NOTE, 1)
+        open(p, "w", encoding="utf-8").write(s)
+
+
 def main():
     path = os.path.join(ROOT, "main.py")
 
@@ -258,6 +279,8 @@ def main():
         new.append(chunks[n])
     content = "\n".join(new).rstrip() + "\n"
     open(path, "w", encoding="utf-8").write(content)
+
+    fix_web_settings(ROOT)
 
     for d in ("handlers", "web", "diag"):
         p = os.path.join(ROOT, d, "__init__.py")
