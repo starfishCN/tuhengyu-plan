@@ -5,9 +5,12 @@
     冷却中（同人同会话刚戳过） → 不理
     同一人短时间连戳到阈值     → 怼一句
     睡眠时段（作息里 awake=false）→ 不理
-    好感高（关系好）           → 回戳，多数再补一句话
-    好感低（反感/敌对）        → 多半不理，偶尔冷一句
-    普通关系                   → 基本都答一句，多数同时回戳
+    好感高（关系好）           → 大概率回戳 + 说话，也可能只做一样
+    好感低（反感/敌对）        → 多半不理，偶尔冷一句或敷衍回戳一下
+    普通关系                   → 回戳与回话各掷一次，可能只回戳、只说话、两样都做、或干脆不理
+
+「回戳」与「回话」是两件独立的事，各自按概率决定，所以：
+    不是每次被戳都要回戳，也不是每次都要回应。
 
 文字部分交给模型（人设驱动）；拿不到模型时退回内置短句，保证有反应。
 回戳走协议端的 send_poke 动作，失败不影响文字。
@@ -46,6 +49,7 @@ def decide(
     repeat: int = 0,
     cooling: bool = False,
     poke_back_prob: float = 0.6,
+    speak_prob: float = 0.75,
     snap_threshold: int = 3,
     friendly_at: int = 40,
     cold_at: int = -10,
@@ -59,14 +63,23 @@ def decide(
         return Reaction(SNAP, "同一人连戳")
     if not awake:
         return Reaction(IGNORE, "睡着了")
+    # 回戳与说话各掷一次，互不绑定：
+    #   都中 → 回戳 + 说一句；只中回戳 → 默默戳回去；只中说话 → 只应一句；都不中 → 不搭理。
     if favour >= friendly_at:
-        return Reaction(BOTH if r.random() < 0.75 else SILENT_POKE, "关系好")
-    if favour < cold_at:
-        return Reaction(IGNORE if r.random() < 0.6 else TEXT, "关系差")
-    # 普通关系：基本都答一句（可同时回戳），不静默只戳回去
-    if r.random() < poke_back_prob:
-        return Reaction(BOTH, "普通关系")
-    return Reaction(TEXT, "普通关系")
+        back_p, speak_p, why = 0.70, 0.90, "关系好"
+    elif favour < cold_at:
+        back_p, speak_p, why = 0.15, 0.30, "关系差"
+    else:
+        back_p, speak_p, why = poke_back_prob, speak_prob, "普通关系"
+    back = r.random() < back_p
+    speak = r.random() < speak_p
+    if back and speak:
+        return Reaction(BOTH, why)
+    if back:
+        return Reaction(SILENT_POKE, why + "·只回戳")
+    if speak:
+        return Reaction(TEXT, why + "·只说话")
+    return Reaction(IGNORE, why + "·这次没理")
 
 
 # ---------- 无模型时的回落台词 ----------

@@ -45,6 +45,8 @@ class TuhengyuPlugin(Star):
         self._favour_store = None
         self._poke_log = {}  # 戳一戳：键 → [时间戳]，用于连戳计数与冷却
         self._bridge_obj = None  # OneBot 桥（回戳用 send_poke 动作）
+        self._tok_last = None  # 最近一次 LLM 请求的构成快照（token 诊断用）
+        self._tok_stats = self._tok_load()  # 今日请求 / token 累计（存盘）
         # 注册插件页面的后端 API（页面在 pages/status/）。
         try:
             context.register_web_api(
@@ -297,6 +299,7 @@ class TuhengyuPlugin(Star):
     @filter.on_llm_request()
     async def inject_favour(self, event: AstrMessageEvent, req: ProviderRequest):
         """把当前三维状态与更新指令追加到 system prompt。"""
+        self._tok_snapshot(event, req)
         sec = self._favour_cfg()
         if not sec.get("enabled", True) or not sec.get("inject", True):
             return
@@ -312,6 +315,7 @@ class TuhengyuPlugin(Star):
     @filter.on_llm_response()
     async def collect_favour(self, event: AstrMessageEvent, resp: LLMResponse):
         """从回复里把状态行整行剥离并落库。缺字段保持原值，不猜。"""
+        self._tok_output(resp)
         sec = self._favour_cfg()
         if not sec.get("enabled", True):
             return
@@ -470,6 +474,10 @@ class TuhengyuPlugin(Star):
             prob = float(sec.get("poke_back_prob", 0.6))
         except (TypeError, ValueError):
             prob = 0.6
+        try:
+            speak_prob = float(sec.get("speak_prob", 0.75))
+        except (TypeError, ValueError):
+            speak_prob = 0.75
 
         repeat, cooling = self._poke_touch(f"{umo}:{uid}", now, window, cooldown)
 
@@ -496,9 +504,12 @@ class TuhengyuPlugin(Star):
             repeat=repeat,
             cooling=cooling,
             poke_back_prob=prob,
+            speak_prob=speak_prob,
             snap_threshold=threshold,
         )
         if reaction.kind == POKE_IGNORE:
+            if reaction.reason != "冷却中":
+                self.logger.info(f"[图恒宇] 戳一戳：这次不搭理（{reaction.reason}）。")
             return
 
         if reaction.poke_back():
@@ -514,6 +525,136 @@ class TuhengyuPlugin(Star):
             text = fallback_text(reaction, favour=favour, awake=awake, group=group)
         if text:
             yield event.plain_result(text)
+
+    # ---------- token 诊断 ----------
+    # 折算口径：中文 1 token ≈ 2.06 字符（实测 7994 字符 ≈ 3876 token）。
+    _TOKEN_CHARS = 2.06
+
+    def _est_tokens(self, chars) -> int:
+        try:
+            return int(round(int(chars or 0) / self._TOKEN_CHARS))
+        except Exception:
+            return 0
+
+    def _tok_path(self) -> str:
+        import os
+
+        return os.path.join(self._data_dir(), "token_stats.json")
+
+    def _tok_blank(self) -> dict:
+        return {
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "reqs": 0,
+            "in": 0,
+            "out": 0,
+            "p_reqs": 0,
+            "p_in": 0,
+        }
+
+    def _tok_load(self) -> dict:
+        import json
+        import os
+
+        blank = self._tok_blank()
+        try:
+            if os.path.exists(self._tok_path()):
+                with open(self._tok_path(), encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict) and data.get("date") == blank["date"]:
+                    for k, v in blank.items():
+                        data.setdefault(k, v)
+                    return data
+        except Exception as e:
+            self.logger.debug(f"[图恒宇] 读 token 统计失败：{e}")
+        return blank
+
+    def _tok_roll(self) -> None:
+        if self._tok_stats.get("date") != datetime.now().strftime("%Y-%m-%d"):
+            self._tok_stats = self._tok_blank()
+
+    def _tok_save(self) -> None:
+        import json
+
+        try:
+            with open(self._tok_path(), "w", encoding="utf-8") as f:
+                json.dump(self._tok_stats, f, ensure_ascii=False)
+        except Exception as e:
+            self.logger.debug(f"[图恒宇] 写 token 统计失败：{e}")
+
+    def _tok_snapshot(self, event, req) -> None:
+        """记下一次 LLM 请求的构成，并累计今日用量。只在 on_llm_request 里跑。"""
+        try:
+            sys_text = getattr(req, "system_prompt", "") or ""
+            ctxs = getattr(req, "contexts", None) or []
+            ctx_chars = 0
+            for m in ctxs:
+                if not isinstance(m, dict):
+                    continue
+                c = m.get("content")
+                if isinstance(c, str):
+                    ctx_chars += len(c)
+                elif isinstance(c, list):
+                    for part in c:
+                        if isinstance(part, dict) and isinstance(part.get("text"), str):
+                            ctx_chars += len(part["text"])
+            tools = []
+            ts = getattr(req, "func_tool", None)
+            for t in (getattr(ts, "tools", None) or []):
+                name = getattr(t, "name", "") or "?"
+                desc = getattr(t, "description", "") or ""
+                try:
+                    import json as _json
+
+                    params = _json.dumps(getattr(t, "parameters", None) or {}, ensure_ascii=False)
+                except Exception:
+                    params = ""
+                tools.append((name, len(desc) + len(params)))
+            tools.sort(key=lambda x: -x[1])
+            prompt_chars = len(getattr(req, "prompt", "") or "")
+            self._tok_last = {
+                "at": datetime.now().strftime("%H:%M:%S"),
+                "model": str(getattr(req, "model", "") or "") or "(默认)",
+                "sys_chars": len(sys_text),
+                "ctx_count": len(ctxs),
+                "ctx_chars": ctx_chars,
+                "tools": tools,
+                "tools_chars": sum(c for _n, c in tools),
+                "prompt_chars": prompt_chars,
+            }
+            self._tok_roll()
+            is_private = False
+            try:
+                is_private = bool(event.is_private_chat())
+            except Exception:
+                pass
+            total = self._est_tokens(len(sys_text) + ctx_chars + prompt_chars)
+            self._tok_stats["reqs"] += 1
+            self._tok_stats["in"] += total
+            if is_private:
+                self._tok_stats["p_reqs"] += 1
+                self._tok_stats["p_in"] += total
+            self._tok_save()
+        except Exception as e:
+            self.logger.debug(f"[图恒宇] token 快照失败：{e}")
+
+    def _tok_output(self, resp) -> None:
+        """累计一次输出的 token：有 usage 用真值，否则按回复字符估。"""
+        try:
+            self._tok_roll()
+            out = 0
+            usage = getattr(resp, "usage", None)
+            if usage is not None:
+                try:
+                    out = int(getattr(usage, "output", 0) or 0)
+                except Exception:
+                    out = 0
+            if not out:
+                out = self._est_tokens(len(getattr(resp, "completion_text", "") or ""))
+            if out:
+                self._tok_stats["out"] += out
+            self._tok_save()
+        except Exception as e:
+            self.logger.debug(f"[图恒宇] token 输出统计失败：{e}")
 
     # ---------- 命令 ----------
     async def _publish_once(self) -> dict:
@@ -581,6 +722,34 @@ class TuhengyuPlugin(Star):
             f"[图恒宇] 好感度 {state['favour']}｜印象：{state['attitude']}"
             f"｜关系：{state['relationship']}"
         )
+
+    @filter.command("token诊断")
+    async def token_diag(self, event: AstrMessageEvent):
+        """查看上一次 LLM 请求的 token 构成，以及今日累计用量。"""
+        d = self._tok_last
+        if not d:
+            yield event.plain_result("[图恒宇] token 诊断：本次运行还没捕获到 LLM 请求。")
+            return
+        sys_t = self._est_tokens(d.get("sys_chars", 0))
+        ctx_t = self._est_tokens(d.get("ctx_chars", 0))
+        tool_t = self._est_tokens(d.get("tools_chars", 0))
+        total = sys_t + ctx_t + tool_t + self._est_tokens(d.get("prompt_chars", 0))
+        st = self._tok_stats
+        lines = [
+            f"[图恒宇] token 诊断（最近一次请求 {d.get('at')}，模型 {d.get('model')}）",
+            f"system_prompt：{d.get('sys_chars', 0)} 字符 ≈ {sys_t} token",
+            f"上下文：{d.get('ctx_count', 0)} 条 / {d.get('ctx_chars', 0)} 字符 ≈ {ctx_t} token",
+            f"工具：{len(d.get('tools') or [])} 个 / {d.get('tools_chars', 0)} 字符 ≈ {tool_t} token",
+            f"本次合计 ≈ {total} token",
+            f"今日：私聊 {st.get('p_reqs', 0)} 次，输入 ≈ {st.get('p_in', 0)} token",
+            f"　　　全部 {st.get('reqs', 0)} 次，输出 ≈ {st.get('out', 0)} token",
+        ]
+        tools = d.get("tools") or []
+        if tools:
+            top = "、".join(f"{n}≈{self._est_tokens(c)}" for n, c in tools[:6])
+            lines.append(f"工具明细（前 6）：{top}")
+        yield event.plain_result("\n".join(lines))
+
 
     # ---------- 插件页面 API ----------
     async def page_status(self):

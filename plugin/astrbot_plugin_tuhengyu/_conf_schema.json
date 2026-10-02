@@ -4,7 +4,6 @@
     "type": "bool",
     "default": true
   },
-
   "persona_id": {
     "description": "人格：从 AstrBot 已配置的人格里挑一个",
     "hint": "留空（推荐）= 跟随 AstrBot 当前默认人格 —— 在 AstrBot 里换了人格，这里会自动跟上。只有当你想给插件单独指定另一个人格时才填。",
@@ -18,7 +17,6 @@
     "type": "text",
     "default": ""
   },
-
   "chat_private": {
     "type": "object",
     "description": "[私聊] 一对一会话",
@@ -45,7 +43,6 @@
       }
     }
   },
-
   "chat_group": {
     "type": "object",
     "description": "[群聊] 多人群里",
@@ -72,7 +69,6 @@
       }
     }
   },
-
   "schedule": {
     "type": "object",
     "description": "[作息] 它什么时候醒着、在干什么",
@@ -99,7 +95,6 @@
       }
     }
   },
-
   "scheduler": {
     "type": "object",
     "description": "[调度] 多久检查一次「现在该不该做点什么」",
@@ -147,7 +142,6 @@
       }
     }
   },
-
   "moment": {
     "type": "object",
     "description": "[空间] 主动发 QQ 空间动态",
@@ -249,7 +243,7 @@
   "poke": {
     "type": "object",
     "description": "[戳一戳] 被戳时的反应",
-    "hint": "反应跟人设与好感度走：冷却内不理、同一人连戳到阈值怼一句、睡着不理、关系好回戳并说话、普通关系回戳或问一句、关系差多半不理。回戳走 OneBot poke 段，平台不支持时只发文字。",
+    "hint": "反应跟人设与好感度走：冷却内不理、同一人连戳到阈值怼一句、睡着不理。关系好时大概率回戳并说话；关系差多半不理；普通关系下「回戳」与「回话」各掷一次，可能只回戳、只说话、两样都做、或干脆不搭理。回戳走 OneBot send_poke 动作，失败不影响文字。",
     "items": {
       "enabled": {
         "type": "bool",
@@ -282,9 +276,15 @@
       },
       "poke_back_prob": {
         "type": "float",
-        "description": "普通关系下回戳（而不是问一句）的概率（0-1）",
-        "hint": "默认 0.6。",
+        "description": "回戳的概率（0-1）",
+        "hint": "普通关系下，碰一下之后会不会戳回去。默认 0.6。",
         "default": 0.6
+      },
+      "speak_prob": {
+        "type": "float",
+        "description": "回话的概率（0-1）",
+        "hint": "普通关系下，碰一下之后会不会应一句。默认 0.75。和回戳相互独立——两个都不中就完全没反应。",
+        "default": 0.75
       },
       "model": {
         "type": "string",
