@@ -1209,7 +1209,7 @@ function drawFavourChart(data) {
   // 按设备像素比放大画布，避免高分屏下糊（CSS 尺寸不变，只提高绘制分辨率）
   const dpr = window.devicePixelRatio || 1;
   const cssW = cv.clientWidth || 700;
-  const cssH = Math.max(180, Math.round((cssW * 260) / 820));
+  const cssH = Math.max(200, Math.round((cssW * 300) / 820));
   cv.width = Math.round(cssW * dpr);
   cv.height = Math.round(cssH * dpr);
   cv.style.height = cssH + "px";
@@ -1219,7 +1219,7 @@ function drawFavourChart(data) {
   const padL = 44;
   const padR = 16;
   const padT = 16;
-  const padB = 26;
+  const padB = 40;
   const x0 = padL;
   const x1 = W - padR;
   const y0 = padT;
@@ -1280,7 +1280,19 @@ function drawFavourChart(data) {
 
   const n = hist.length;
   const toX = (i) => (n <= 1 ? (x0 + x1) / 2 : x0 + (i / (n - 1)) * (x1 - x0));
-
+  // 竖向淡网格：点多了也能数清是第几次变化
+  if (n > 1) {
+    const step = Math.max(1, Math.ceil(n / 8));
+    ctx.strokeStyle = line;
+    ctx.lineWidth = 1;
+    for (let i = 0; i < n; i += step) {
+      const gx = toX(i);
+      ctx.beginPath();
+      ctx.moveTo(gx, y0);
+      ctx.lineTo(gx, y1);
+      ctx.stroke();
+    }
+  }
   // 折线
   ctx.strokeStyle = accent;
   ctx.lineWidth = 2;
@@ -1309,6 +1321,41 @@ function drawFavourChart(data) {
   ctx.textAlign = "right";
   ctx.textBaseline = "bottom";
   ctx.fillText(`当前 ${last.favour}`, x1, toY(last.favour) - 4);
+
+  // x 轴：首 / 中 / 末 三个时间标签（同日只显时间，跨日显月-日）
+  const fmtT = (t, sameDay) => {
+    const s = String(t || "");
+    if (s.length < 16) return "";
+    return sameDay ? s.slice(11, 16) : s.slice(5, 10);
+  };
+  const sameDay = String(hist[0].t || "").slice(0, 10) === String(last.t || "").slice(0, 10);
+  const marks =
+    n === 1
+      ? [[0, "left"]]
+      : n === 2
+        ? [
+            [0, "left"],
+            [n - 1, "right"],
+          ]
+        : [
+            [0, "left"],
+            [Math.floor((n - 1) / 2), "center"],
+            [n - 1, "right"],
+          ];
+  ctx.fillStyle = muted;
+  ctx.font = "11px -apple-system, sans-serif";
+  ctx.textBaseline = "top";
+  for (const [i, align] of marks) {
+    const txt = fmtT(hist[i].t, sameDay);
+    if (!txt) continue;
+    ctx.textAlign = align;
+    ctx.fillText(txt, toX(i), y1 + 8);
+  }
+  // 免得被当成时间轴
+  ctx.textAlign = "center";
+  ctx.font = "10px -apple-system, sans-serif";
+  ctx.fillStyle = muted;
+  ctx.fillText("按变化点等距排列，不是时间比例", (x0 + x1) / 2, H - 14);
 }
 
 function bind() {

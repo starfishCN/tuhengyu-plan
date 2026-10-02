@@ -29,6 +29,7 @@ from ..core.favour import (
     parse_curve_json,
     parse_state_marker,
     persona_fingerprint,
+    sanitize_contexts,
 )
 from ..core.intent import FALLBACK as INTENT_FALLBACK
 from ..core.intent import labels as intent_labels
@@ -107,6 +108,14 @@ class FavourHandlers:
     async def inject_favour(self, event: AstrMessageEvent, req: ProviderRequest):
         """把当前三维状态与更新指令追加到 system prompt。"""
         self._tok_snapshot(event, req)
+        # 历史里残留的旧状态行会被模型照抄，导致手动改过的数值被拉回。
+        # 这里只清上下文里的行，不动 system prompt（指令行本身含标记）。
+        try:
+            n = sanitize_contexts(req.contexts)
+            if n:
+                self.logger.debug(f"[图恒宇] 已清理历史中 {n} 处状态行残留。")
+        except Exception as e:
+            self.logger.warning(f"[图恒宇] 清理历史状态行失败：{e}")
         sec = self._favour_cfg()
         if not sec.get("enabled", True) or not sec.get("inject", True):
             return

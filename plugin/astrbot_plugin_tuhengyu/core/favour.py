@@ -202,6 +202,74 @@ def parse_state_marker(text: str) -> tuple[str, dict | None]:
     return cleaned, (update or None)
 
 
+def strip_marker_lines(text: str) -> str:
+    """把文本里所有状态行整行去掉（用于清洗历史上下文，不动正文其他行）。"""
+    if not text or MARKER not in text:
+        return text
+    kept = [ln for ln in text.split("\n") if MARKER not in ln]
+    return "\n".join(kept).strip()
+
+
+def sanitize_contexts(contexts) -> int:
+    """就地把历史上下文里残留的状态行清掉，返回改动处数。
+
+    历史里留着上一轮的 `%%FAV%% 12 | …`，模型会照着抄，导致手动改过的数值
+    聊几轮又被拉回旧值。清掉之后模型只能看 system prompt 里的权威值。
+    只删行，不删消息；不碰 system_prompt（那里的指令行本身就含标记）。
+    """
+    if not isinstance(contexts, list):
+        return 0
+    changed = 0
+
+    def clean(value):
+        if isinstance(value, str) and MARKER in value:
+            new = strip_marker_lines(value)
+            if new != value:
+                return new, True
+        return value, False
+
+    for msg in contexts:
+        if isinstance(msg, dict):
+            content = msg.get("content")
+            if isinstance(content, str):
+                new, hit = clean(content)
+                if hit:
+                    msg["content"] = new
+                    changed += 1
+            elif isinstance(content, list):
+                for part in content:
+                    if isinstance(part, dict):
+                        for field_name in ("text", "think", "content"):
+                            if field_name in part:
+                                new, hit = clean(part[field_name])
+                                if hit:
+                                    part[field_name] = new
+                                    changed += 1
+                    elif isinstance(part, str):
+                        new, hit = clean(part)
+                        if hit:
+                            content[content.index(part)] = new
+                            changed += 1
+                    else:
+                        # ContentPart 之类的对象
+                        for field_name in ("text", "think"):
+                            if hasattr(part, field_name):
+                                cur = getattr(part, field_name)
+                                new, hit = clean(cur)
+                                if hit:
+                                    try:
+                                        setattr(part, field_name, new)
+                                        changed += 1
+                                    except Exception:
+                                        pass
+        elif isinstance(msg, str):
+            new, hit = clean(msg)
+            if hit:
+                contexts[contexts.index(msg)] = new
+                changed += 1
+    return changed
+
+
 def build_injection(state: dict, curve=None) -> str:
     """拼出注入 system_prompt 的状态说明 + 更新指令。curve 给定时用其区间与幅度。"""
     favour = int(state.get("favour", 0) or 0)
@@ -249,7 +317,9 @@ def build_injection(state: dict, curve=None) -> str:
         f"普通负面互动 {rng('negative')}，冒犯 / 辱骂 {rng('insult')}；"
         "提升要谨慎、下降要干脆；印象和关系各一句话，且必须与好感度一致；"
         "即使本轮没有任何变化，也要照写当前值，不得省略这一行；"
-        "不要用任何其他形式复述、暗示或解释这一行。"
+        "不要用任何其他形式复述、暗示或解释这一行。\n"
+        "注意：本段数值是唯一权威的当前状态。上面历史消息里若出现过状态行，"
+        "那是过期记录，一律作废，不得沿用其中的数字。"
     )
 
 
