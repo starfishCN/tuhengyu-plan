@@ -21,6 +21,7 @@ import logging
 import os
 import re
 import time
+from datetime import datetime, timedelta
 
 logger = logging.getLogger("astrbot")
 
@@ -317,6 +318,8 @@ def build_injection(state: dict, curve=None) -> str:
         f"普通负面互动 {rng('negative')}，冒犯 / 辱骂 {rng('insult')}；"
         "提升要谨慎、下降要干脆；印象和关系各一句话，且必须与好感度一致；"
         "即使本轮没有任何变化，也要照写当前值，不得省略这一行；"
+        "印象与关系尤其要逐字照抄上面给出的当前值，不要换措辞、不要润色；"
+        "只有当本轮确实出现了新的实质互动（关系转折、明确表态）时才改写它们。"
         "不要用任何其他形式复述、暗示或解释这一行。\n"
         "注意：本段数值是唯一权威的当前状态。上面历史消息里若出现过状态行，"
         "那是过期记录，一律作废，不得沿用其中的数字。"
@@ -382,6 +385,7 @@ class FavourStore:
         if not k:
             return dict(DEFAULT_STATE)
         state = self.get(user_id, session_id)
+        changed = False
         for field in ("favour", "attitude", "relationship"):
             if field not in patch:
                 continue
@@ -396,9 +400,18 @@ class FavourStore:
                 val = str(val).strip()
                 if not val:
                     continue
-            state[field] = val
+            if state.get(field) != val:
+                state[field] = val
+                changed = True
         if name:
-            state["name"] = str(name).strip()[:40]
+            clean_name = str(name).strip()[:40]
+            if clean_name and state.get("name") != clean_name:
+                state["name"] = clean_name
+                changed = True
+        if not changed:
+            # 值没变就不动时间戳、不写盘：这样页签上的「更新时间」只会被真正的改动刷新，
+            # 手动改完之后若时间戳没再动，说明模型没覆盖它。
+            return state
         state["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
         self.data[k] = state
         self._save()
@@ -481,19 +494,83 @@ class FavourStore:
         state = self.get(k)
         if favour is not None:
             try:
-                state["favour"] = max(-100, min(100, int(favour)))
+                nv = max(-100, min(100, int(favour)))
+                if state.get("favour") != nv:
+                    state["favour"] = nv
             except (TypeError, ValueError):
                 pass
-        if attitude is not None and str(attitude).strip():
-            state["attitude"] = str(attitude).strip()
-        if relationship is not None and str(relationship).strip():
-            state["relationship"] = str(relationship).strip()
+        touched = []
+        for field, val in (("attitude", attitude), ("relationship", relationship)):
+            if val is None:
+                continue
+            nv = str(val).strip()
+            if not nv or state.get(field) == nv:
+                continue
+            state[field] = nv
+            touched.append(field)
         if name is not None and str(name).strip():
             state["name"] = str(name).strip()[:40]
+        if touched:
+            # 手改过的文本字段进保护名单，窗口内不让模型改写（见 manual_hold）
+            state["manual_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+            old = state.get("manual_fields")
+            keep = set(old if isinstance(old, list) else [])
+            state["manual_fields"] = sorted(keep | set(touched))
         state["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
         self.data[k] = state
         self._save()
         return state
+
+    def manual_hold(self, key: str, hours) -> list[str]:
+        """返回仍在「手改保护」内的文本字段；hours<=0 表示不保护。"""
+        try:
+            h = float(hours)
+        except (TypeError, ValueError):
+            return []
+        if h <= 0:
+            return []
+        st = self.data.get(str(key or "").strip())
+        if not isinstance(st, dict):
+            return []
+        ts = str(st.get("manual_at") or "")
+        if not ts:
+            return []
+        try:
+            t = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return []
+        if (datetime.now() - t).total_seconds() > h * 3600:
+            return []
+        fields = st.get("manual_fields")
+        if not isinstance(fields, list):
+            return []
+        return [f for f in fields if f in ("attitude", "relationship")]
+
+    def hold_until(self, key: str, hours) -> str:
+        """保护到期的时刻；无保护返回空串。"""
+        try:
+            h = float(hours)
+        except (TypeError, ValueError):
+            return ""
+        st = self.data.get(str(key or "").strip())
+        ts = str(st.get("manual_at") or "") if isinstance(st, dict) else ""
+        if h <= 0 or not ts:
+            return ""
+        try:
+            t = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return ""
+        return (t + timedelta(hours=h)).strftime("%Y-%m-%d %H:%M")
+
+    def clear_manual_hold(self, key: str) -> None:
+        k = str(key or "").strip()
+        st = self.data.get(k)
+        if not isinstance(st, dict):
+            return
+        st.pop("manual_at", None)
+        st.pop("manual_fields", None)
+        self.data[k] = st
+        self._save()
 
     def remove_by_key(self, key: str) -> None:
         k = str(key or "").strip()

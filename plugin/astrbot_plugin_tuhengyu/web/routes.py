@@ -342,8 +342,12 @@ class WebRoutes:
         fav = self._favour()
         items = fav.list_all()
         hist = self._history()
+        hours = self._favour_cfg().get("manual_hold_hours", 24)
         for it in items:
             it["history"] = hist.get(it["key"], 120)
+            held = fav.manual_hold(it["key"], hours)
+            it["hold_fields"] = held
+            it["hold_until"] = fav.hold_until(it["key"], hours) if held else ""
         curve = self._curve_store().get()
         return json_response({"items": items, "curve": curve, "count": len(items)})
 
@@ -357,6 +361,9 @@ class WebRoutes:
         key = str(body.get("key", "")).strip()
         if not key:
             return error_response("缺少 key", status_code=400)
+        if body.get("clear_hold"):
+            self._favour().clear_manual_hold(key)
+            return json_response({"ok": True, "key": key, "message": "已解除手改保护。"})
 
         def opt(name):
             return None if name not in body else body.get(name)

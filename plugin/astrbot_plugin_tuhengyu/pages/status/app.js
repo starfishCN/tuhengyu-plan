@@ -1038,7 +1038,11 @@ function favourRow(it, curve) {
   tr.dataset.key = it.key;
   tr.innerHTML =
     `<td class="f-name"><div class="f-nick">${esc(shortName(it))}</div>` +
-    `<div class="f-uid">${esc(it.key)}</div></td>` +
+    `<div class="f-uid">${esc(it.key)}</div>` +
+    (it.hold_until
+      ? `<div class="f-hold">🔒 印象/关系锁定至 ${esc(it.hold_until)}</div>`
+      : "") +
+    `</td>` +
     `<td class="f-favour">${it.favour}` +
     `<div class="f-band">${esc(bandNameFor(it.favour, curve))}</div></td>` +
     `<td>${esc(it.attitude)}</td>` +
@@ -1051,6 +1055,7 @@ function favourRow(it, curve) {
     fBtn("重置", "btn btn-ghost f-op", () => doFavourReset(it, "reset")),
     fBtn("删除", "btn btn-ghost f-op", () => doFavourReset(it, "delete")),
   );
+  if (it.hold_until) ops.append(fBtn("解锁", "btn btn-ghost f-op", () => unlockFavour(it)));
   tr.appendChild(ops);
   tr.addEventListener("click", () => {
     favourSelected = it.key;
@@ -1092,10 +1097,20 @@ async function saveEditFavour(tr, it) {
       attitude,
       relationship,
     });
-    setFavourResult("已保存。");
+    setFavourResult("已保存。印象与关系已进入手改保护，窗口内模型不会改写。");
     await loadFavour(true);
   } catch (e) {
     setFavourResult(`保存失败：${e.message}`, true);
+  }
+}
+
+async function unlockFavour(it) {
+  try {
+    await bridge.apiPost("favour-update", { key: it.key, clear_hold: true });
+    setFavourResult("已解除手改保护，模型可以正常更新这两个字段了。");
+    await loadFavour(true);
+  } catch (e) {
+    setFavourResult(`操作失败：${e.message}`, true);
   }
 }
 

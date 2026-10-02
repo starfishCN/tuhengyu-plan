@@ -147,7 +147,22 @@ class FavourHandlers:
             if not uid:
                 return
             scope = self._scope(event, sec)
-            state = self._favour().update(uid, patch, scope, name=self._sender_name(event))
+            store = self._favour()
+            key = FavourStore.key(uid, scope)
+            # 手改保护：窗口内模型不得改写被手动编辑过的文本字段（好感度不受限，
+            # 那个本来就该随互动走）。窗口长度由 manual_hold_hours 配置，0 = 关闭。
+            held = store.manual_hold(key, sec.get("manual_hold_hours", 24))
+            if held:
+                blocked = [f for f in held if f in patch]
+                for f in blocked:
+                    patch.pop(f, None)
+                if blocked:
+                    self.logger.info(
+                        f"[图恒宇] {key} 的印象/关系在手改保护期内，已忽略模型对 {blocked} 的改写。"
+                    )
+            if not any(f in patch for f in ("favour", "attitude", "relationship")):
+                return
+            state = store.update(uid, patch, scope, name=self._sender_name(event))
             # 值有变才记历史（HistoryStore 内部再判一次），供折线图使用
             if "favour" in patch:
                 self._history().record(

@@ -764,3 +764,8 @@ body.drag-active {
   padding: 3px 10px;
   font-size: 12px;
 }
+.f-hold {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--warn, #b45309);
+}
