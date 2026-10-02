@@ -1,4 +1,13 @@
-"""好感度：注入与回收。"""
+"""好感度：注入与回收。
+
+三块状态：
+    favour.json         当前三维状态（含昵称 / 更新时间）
+    favour_history.json 好感度历史采样（画折线用）
+    favour_curve.json  人设驱动、LLM 生成的「变化曲线」参数
+
+曲线生成是懒加载 + 指纹缓存：只有在人设变了（指纹不同）时才再调一次模型，
+平时读盘即用，不烧 token。生成失败 / 未启用一律回落内置默认参数。
+"""
 
 import asyncio
 import json
@@ -12,9 +21,18 @@ from astrbot.api.provider import LLMResponse, ProviderRequest
 from astrbot.api.star import Context, Star
 from astrbot.api.web import error_response, json_response, request as web_request
 from ..core.classify import classify_image
-from ..core.favour import FavourStore, build_injection, parse_state_marker
+from ..core.favour import (
+    CurveStore,
+    FavourStore,
+    HistoryStore,
+    build_injection,
+    parse_curve_json,
+    parse_state_marker,
+    persona_fingerprint,
+)
 from ..core.intent import FALLBACK as INTENT_FALLBACK
 from ..core.intent import labels as intent_labels
+from ..core.llm import generate_curve_text
 from ..core.persona import resolve_persona
 from ..core.proactive import build_proactive_prompt, decide_proactive
 from ..core.poke import IGNORE as POKE_IGNORE
@@ -30,9 +48,19 @@ class FavourHandlers:
         return self._sec("favour")
 
     def _favour(self) -> FavourStore:
-        if self._favour_store is None:
+        if getattr(self, "_favour_store", None) is None:
             self._favour_store = FavourStore(self._data_dir())
         return self._favour_store
+
+    def _history(self) -> HistoryStore:
+        if getattr(self, "_favour_history", None) is None:
+            self._favour_history = HistoryStore(self._data_dir())
+        return self._favour_history
+
+    def _curve_store(self) -> CurveStore:
+        if getattr(self, "_favour_curve_store", None) is None:
+            self._favour_curve_store = CurveStore(self._data_dir())
+        return self._favour_curve_store
 
     def _scope(self, event: AstrMessageEvent, sec: dict) -> str | None:
         """会话独立开关；关着返回 None（全局状态）。"""
@@ -42,6 +70,38 @@ class FavourHandlers:
             return str(event.unified_msg_origin or "") or None
         except Exception:
             return None
+
+    async def _ensure_curve(self) -> dict:
+        """取当前曲线；仅当人设指纹变化时才重新调 LLM 生成。
+
+        失败 / 无人设 → 原样返回已有曲线（默认参数兜底），不抛。
+        """
+        store = self._curve_store()
+        cur = store.get()
+        sec = self._favour_cfg()
+        if sec.get("curve_enabled", True) is False:
+            return cur
+        try:
+            persona, _label, _name = await resolve_persona(self.context, self.config)
+        except Exception:
+            persona = ""
+        if not persona:
+            return cur
+        fp = persona_fingerprint(persona)
+        if cur.get("source") == "llm" and cur.get("persona_fingerprint") == fp:
+            return cur
+        try:
+            text = await generate_curve_text(
+                self.context, persona, str(sec.get("curve_model", "")).strip()
+            )
+        except Exception as e:
+            self.logger.warning(f"[图恒宇] 生成好感度曲线失败：{e}")
+            return cur
+        raw = parse_curve_json(text)
+        if not raw:
+            self.logger.warning("[图恒宇] 好感度曲线解析失败，沿用已有参数。")
+            return cur
+        return store.set(raw, fp, "llm")
 
     @filter.on_llm_request()
     async def inject_favour(self, event: AstrMessageEvent, req: ProviderRequest):
@@ -54,8 +114,9 @@ class FavourHandlers:
             uid = str(event.get_sender_id() or "")
             if not uid:
                 return
+            curve = await self._ensure_curve()
             state = self._favour().get(uid, self._scope(event, sec))
-            req.system_prompt = (req.system_prompt or "") + build_injection(state)
+            req.system_prompt = (req.system_prompt or "") + build_injection(state, curve)
         except Exception as e:
             self.logger.warning(f"[图恒宇] 注入好感度失败：{e}")
 
@@ -74,7 +135,36 @@ class FavourHandlers:
             if cleaned != text:
                 resp.completion_text = cleaned
             uid = str(event.get_sender_id() or "")
-            if uid:
-                self._favour().update(uid, patch, self._scope(event, sec))
+            if not uid:
+                return
+            scope = self._scope(event, sec)
+            state = self._favour().update(uid, patch, scope, name=self._sender_name(event))
+            # 值有变才记历史（HistoryStore 内部再判一次），供折线图使用
+            if "favour" in patch:
+                self._history().record(
+                    FavourStore.key(uid, scope),
+                    state.get("favour", 0),
+                    state.get("attitude", ""),
+                    state.get("relationship", ""),
+                )
         except Exception as e:
             self.logger.warning(f"[图恒宇] 回收好感度失败：{e}")
+
+    @staticmethod
+    def _sender_name(event: AstrMessageEvent) -> str:
+        """尽量取发送者显示名，取不到返回空串（页签里回落显示 QQ）。"""
+        try:
+            name = event.get_sender_name()
+            if name:
+                return str(name).strip()[:40]
+        except Exception:
+            pass
+        try:
+            sender = getattr(event, "message_obj", None)
+            sender = getattr(sender, "sender", None)
+            nick = getattr(sender, "nickname", None)
+            if nick:
+                return str(nick).strip()[:40]
+        except Exception:
+            pass
+        return ""

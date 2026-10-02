@@ -21,6 +21,7 @@
         <button class="tab" data-tab="actions" type="button">操作</button>
         <button class="tab" data-tab="settings" type="button">设置</button>
         <button class="tab" data-tab="stickers" type="button">表情包</button>
+        <button class="tab" data-tab="favour" type="button">好感度</button>
       </nav>
 
       <p id="notice" class="notice" hidden></p>
@@ -187,6 +188,56 @@
           <div id="sticker-gallery" class="gallery">
             <div class="empty">读取中 …</div>
           </div>
+        </section>
+      </section>
+
+      <!-- ========== 页签 5：好感度 ========== -->
+      <section class="tab-pane" id="pane-favour">
+        <section class="panel">
+          <h2>好感度</h2>
+          <p class="set-tip">
+            每个和 bot 互动过的对象一行：当前好感 / 印象 / 关系 / 最近更新。好感范围
+            <b>-100</b>（极度厌恶）~ <b>100</b>（挚爱）。点<b>「编辑」</b>就地改数值，<b>「重置」</b>清零，<b>「删除」</b>整条移除。
+            点某一行即在下面画出这人对 bot 的好感变化折线。
+          </p>
+          <div class="sticker-bar">
+            <span id="favour-summary" class="card-hint">读取中 …</span>
+            <div class="sticker-bar-actions">
+              <button id="favour-curve-btn" class="btn btn-ghost" type="button">重算曲线</button>
+              <button id="favour-curve-reset" class="btn btn-ghost" type="button">恢复默认曲线</button>
+              <button id="favour-refresh" class="btn btn-ghost" type="button">刷新</button>
+            </div>
+          </div>
+          <div id="favour-result" class="action-result" hidden></div>
+          <table class="table favour-table">
+            <thead>
+              <tr>
+                <th>对象</th>
+                <th>好感</th>
+                <th>印象</th>
+                <th>关系</th>
+                <th>最近</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="favour-list">
+              <tr><td colspan="6" class="empty">读取中 …</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="panel">
+          <h2>好感变化曲线</h2>
+          <p class="set-tip">
+            曲线由<b>当前人设</b>生成：决定各档位的语气，以及每次互动的好感升降幅度。人设没变就复用盘上的结果，不会重复问模型。
+            改完人设、想立刻按新性子重算，点上面的「重算曲线」。
+          </p>
+          <div id="favour-curve-info" class="card-hint">—</div>
+          <div class="favour-chart-wrap">
+            <canvas id="favour-chart" width="820" height="260"></canvas>
+          </div>
+          <div id="favour-bands" class="favour-bands"></div>
+          <div id="favour-deltas" class="favour-deltas"></div>
         </section>
       </section>
     </main>

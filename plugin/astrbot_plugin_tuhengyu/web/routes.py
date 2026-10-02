@@ -12,9 +12,16 @@ from astrbot.api.provider import LLMResponse, ProviderRequest
 from astrbot.api.star import Context, Star
 from astrbot.api.web import error_response, json_response, request as web_request
 from ..core.classify import classify_image
-from ..core.favour import FavourStore, build_injection, parse_state_marker
+from ..core.favour import (
+    FavourStore,
+    build_injection,
+    parse_curve_json,
+    parse_state_marker,
+    persona_fingerprint,
+)
 from ..core.intent import FALLBACK as INTENT_FALLBACK
 from ..core.intent import labels as intent_labels
+from ..core.llm import generate_curve_text
 from ..core.persona import resolve_persona
 from ..core.proactive import build_proactive_prompt, decide_proactive
 from ..core.poke import IGNORE as POKE_IGNORE
@@ -328,3 +335,107 @@ class WebRoutes:
             }
         )
         return json_response(data)
+
+    # ---------- 好感度页签 API ----------
+    async def page_favour_list(self):
+        """GET /astrbot_plugin_tuhengyu/favour-list —— 条目 + 历史 + 曲线。"""
+        fav = self._favour()
+        items = fav.list_all()
+        hist = self._history()
+        for it in items:
+            it["history"] = hist.get(it["key"], 120)
+        curve = self._curve_store().get()
+        return json_response({"items": items, "curve": curve, "count": len(items)})
+
+    async def page_favour_update(self):
+        """POST /astrbot_plugin_tuhengyu/favour-update —— 手改好感 / 印象 / 关系 / 昵称。"""
+        try:
+            body = await web_request.json({})
+        except Exception:
+            body = {}
+        body = body or {}
+        key = str(body.get("key", "")).strip()
+        if not key:
+            return error_response("缺少 key", status_code=400)
+
+        def opt(name):
+            return None if name not in body else body.get(name)
+
+        state = self._favour().set_state_by_key(
+            key,
+            favour=opt("favour"),
+            attitude=opt("attitude"),
+            relationship=opt("relationship"),
+            name=opt("name"),
+        )
+        if state is None:
+            return error_response("无效的 key", status_code=400)
+        return json_response({"ok": True, "key": key, "state": state})
+
+    async def page_favour_reset(self):
+        """POST /astrbot_plugin_tuhengyu/favour-reset —— 重置（保留）或删除（整条移除）。"""
+        try:
+            body = await web_request.json({})
+        except Exception:
+            body = {}
+        body = body or {}
+        key = str(body.get("key", "")).strip()
+        if not key:
+            return error_response("缺少 key", status_code=400)
+        mode = str(body.get("mode", "reset")).strip() or "reset"
+        if mode == "delete":
+            self._favour().remove_by_key(key)
+            self._history().remove(key)
+            msg = "已删除该用户记录"
+        else:
+            self._favour().reset_by_key(key)
+            msg = "已重置该用户好感度"
+        return json_response({"ok": True, "key": key, "mode": mode, "message": msg})
+
+    async def page_favour_curve(self):
+        """POST /astrbot_plugin_tuhengyu/favour-curve —— 重算 / 重置 / 手改曲线。"""
+        try:
+            body = await web_request.json({})
+        except Exception:
+            body = {}
+        body = body or {}
+        action = str(body.get("action", "regenerate")).strip() or "regenerate"
+        store = self._curve_store()
+        if action == "reset":
+            curve = store.reset()
+            return json_response(
+                {"ok": True, "curve": curve, "message": "已恢复内置默认曲线"}
+            )
+        if action == "save":
+            raw = body.get("curve")
+            if not isinstance(raw, dict):
+                return error_response("curve 不是对象", status_code=400)
+            curve = store.set(raw, "", "manual")
+            return json_response(
+                {"ok": True, "curve": curve, "message": "已保存手改曲线"}
+            )
+        try:
+            persona, label, _name = await resolve_persona(self.context, self.config)
+        except Exception:
+            persona, label = "", ""
+        if not persona:
+            return error_response("未取到人设，无法生成曲线", status_code=400)
+        sec = self._favour_cfg()
+        try:
+            text = await generate_curve_text(
+                self.context, persona, str(sec.get("curve_model", "")).strip()
+            )
+        except Exception as e:
+            return error_response(f"生成失败：{e}", status_code=500)
+        raw = parse_curve_json(text)
+        if not raw:
+            return error_response("模型输出无法解析为 JSON", status_code=502)
+        curve = store.set(raw, persona_fingerprint(persona), "llm")
+        return json_response(
+            {
+                "ok": True,
+                "curve": curve,
+                "source": label,
+                "message": "已按当前人设重算曲线",
+            }
+        )

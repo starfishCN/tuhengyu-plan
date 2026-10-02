@@ -57,6 +57,8 @@ class TuhengyuPlugin(StickerHandlers, FavourHandlers, PokeHandlers, ProactiveHan
         self._scheduler = None
         self._task = None
         self._favour_store = None
+        self._favour_history = None
+        self._favour_curve_store = None
         self._poke_log = {}  # 戳一戳：键 → [时间戳]，用于连戳计数与冷却
         self._bridge_obj = None  # OneBot 桥（回戳用 send_poke 动作）
         self._tok_last = None  # 最近一次 LLM 请求的构成快照（token 诊断用）
@@ -118,6 +120,30 @@ class TuhengyuPlugin(StickerHandlers, FavourHandlers, PokeHandlers, ProactiveHan
                 self.page_sticker_move,
                 ["POST"],
                 "插件页面：手动移动表情包分类",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/favour-list",
+                self.page_favour_list,
+                ["GET"],
+                "插件页面：好感度列表",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/favour-update",
+                self.page_favour_update,
+                ["POST"],
+                "插件页面：修改某人好感度",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/favour-reset",
+                self.page_favour_reset,
+                ["POST"],
+                "插件页面：重置 / 删除某人好感度",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/favour-curve",
+                self.page_favour_curve,
+                ["POST"],
+                "插件页面：重算 / 重置好感度曲线",
             )
             context.register_web_api(
                 f"/{PLUGIN_NAME}/settings",

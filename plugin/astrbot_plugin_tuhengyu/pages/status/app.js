@@ -217,6 +217,7 @@ function switchTab(name) {
     p.classList.toggle("active", p.id === "pane-" + name);
   }
   if (name === "stickers") loadStickers();
+  if (name === "favour") loadFavour();
 }
 
 function setupTabs() {
@@ -900,6 +901,334 @@ function stickerReload() {
   });
 }
 
+// ==================== 好感度 ====================
+
+let favourData = null;
+let favourSelected = null;
+
+function setFavourResult(message, isError) {
+  const node = $("favour-result");
+  if (!node) return;
+  if (!message) {
+    node.hidden = true;
+    node.textContent = "";
+    node.classList.remove("err");
+    return;
+  }
+  node.hidden = false;
+  node.classList.toggle("err", !!isError);
+  node.textContent = message;
+}
+
+function fBtn(label, cls, onClick) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = cls;
+  b.textContent = label;
+  b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    onClick();
+  });
+  return b;
+}
+
+function shortName(it) {
+  if (it.name) return it.name;
+  const k = String(it.key || "");
+  const parts = k.split("_");
+  return parts[parts.length - 1] || k;
+}
+
+function bandNameFor(favour, curve) {
+  const bands = curve && Array.isArray(curve.bands) && curve.bands.length ? curve.bands : null;
+  if (!bands) return "";
+  const sorted = [...bands].sort((a, b) => b.min - a.min);
+  for (const b of sorted) if (favour >= b.min) return b.name;
+  return sorted.length ? sorted[sorted.length - 1].name : "";
+}
+
+async function loadFavour(force) {
+  if (!force && favourData) {
+    renderFavour(favourData);
+    return;
+  }
+  try {
+    const data = await bridge.apiGet("favour-list");
+    favourData = data;
+    renderFavour(data);
+  } catch (e) {
+    setFavourResult(`读取好感度失败：${e.message}`, true);
+  }
+}
+
+function renderFavour(data) {
+  const tbody = $("favour-list");
+  if (!tbody) return;
+  const items = (data && data.items) || [];
+  const curve = (data && data.curve) || {};
+  text("favour-summary", items.length ? `共 ${items.length} 位对象` : "暂无互动记录");
+  if (!favourSelected || !items.some((i) => i.key === favourSelected)) {
+    favourSelected = items.length ? items[0].key : null;
+  }
+  if (!items.length) {
+    tbody.innerHTML =
+      '<tr><td colspan="6" class="empty">暂无互动记录。等有人和 bot 聊过，这里就会出现。</td></tr>';
+  } else {
+    tbody.innerHTML = "";
+    for (const it of items) tbody.appendChild(favourRow(it, curve));
+  }
+  renderCurve(data);
+}
+
+function favourRow(it, curve) {
+  const tr = document.createElement("tr");
+  tr.className = "favour-row" + (it.key === favourSelected ? " selected" : "");
+  tr.dataset.key = it.key;
+  tr.innerHTML =
+    `<td class="f-name"><div class="f-nick">${esc(shortName(it))}</div>` +
+    `<div class="f-uid">${esc(it.key)}</div></td>` +
+    `<td class="f-favour">${it.favour}` +
+    `<div class="f-band">${esc(bandNameFor(it.favour, curve))}</div></td>` +
+    `<td>${esc(it.attitude)}</td>` +
+    `<td>${esc(it.relationship)}</td>` +
+    `<td class="f-time">${esc(it.updated_at || DASH)}</td>`;
+  const ops = document.createElement("td");
+  ops.className = "f-ops";
+  ops.append(
+    fBtn("编辑", "btn btn-ghost f-op", () => startEditFavour(tr, it)),
+    fBtn("重置", "btn btn-ghost f-op", () => doFavourReset(it, "reset")),
+    fBtn("删除", "btn btn-ghost f-op", () => doFavourReset(it, "delete")),
+  );
+  tr.appendChild(ops);
+  tr.addEventListener("click", () => {
+    favourSelected = it.key;
+    for (const r of document.querySelectorAll(".favour-row")) {
+      r.classList.toggle("selected", r.dataset.key === favourSelected);
+    }
+    drawFavourChart(favourData);
+  });
+  return tr;
+}
+
+function startEditFavour(tr, it) {
+  if (tr.classList.contains("editing")) return;
+  tr.classList.add("editing");
+  tr.innerHTML =
+    `<td class="f-name"><div class="f-nick">${esc(shortName(it))}</div>` +
+    `<div class="f-uid">${esc(it.key)}</div></td>` +
+    `<td><input class="f-in f-in-favour" type="number" min="-100" max="100" value="${it.favour}"></td>` +
+    `<td><input class="f-in f-in-att" type="text" value="${esc(it.attitude)}"></td>` +
+    `<td><input class="f-in f-in-rel" type="text" value="${esc(it.relationship)}"></td>` +
+    `<td class="f-time">${esc(it.updated_at || DASH)}</td>`;
+  const ops = document.createElement("td");
+  ops.className = "f-ops";
+  ops.append(
+    fBtn("保存", "btn f-op", () => saveEditFavour(tr, it)),
+    fBtn("取消", "btn btn-ghost f-op", () => loadFavour(true)),
+  );
+  tr.appendChild(ops);
+}
+
+async function saveEditFavour(tr, it) {
+  const favour = tr.querySelector(".f-in-favour")?.value;
+  const attitude = tr.querySelector(".f-in-att")?.value ?? "";
+  const relationship = tr.querySelector(".f-in-rel")?.value ?? "";
+  try {
+    await bridge.apiPost("favour-update", {
+      key: it.key,
+      favour: Number(favour),
+      attitude,
+      relationship,
+    });
+    setFavourResult("已保存。");
+    await loadFavour(true);
+  } catch (e) {
+    setFavourResult(`保存失败：${e.message}`, true);
+  }
+}
+
+async function doFavourReset(it, mode) {
+  if (mode === "delete" && !window.confirm(`删除「${shortName(it)}」的全部好感记录？`)) {
+    return;
+  }
+  try {
+    const d = await bridge.apiPost("favour-reset", { key: it.key, mode });
+    setFavourResult(d.message || "已处理。");
+    await loadFavour(true);
+  } catch (e) {
+    setFavourResult(`操作失败：${e.message}`, true);
+  }
+}
+
+function favourCurveAction(action) {
+  const id = action === "reset" ? "favour-curve-reset" : "favour-curve-btn";
+  const label =
+    action === "reset" ? "正在恢复默认曲线……" : "正在读人设并生成曲线（要调一次模型）……";
+  return withButton(id, label, async () => {
+    try {
+      const d = await bridge.apiPost("favour-curve", { action });
+      setFavourResult(d.message || "完成。");
+      await loadFavour(true);
+    } catch (e) {
+      setFavourResult(`操作失败：${e.message}`, true);
+    }
+  });
+}
+
+const DELTA_LABELS = {
+  positive: "普通正面",
+  affection: "亲密示好",
+  negative: "普通负面",
+  insult: "冒犯辱骂",
+};
+
+function renderCurve(data) {
+  const curve = (data && data.curve) || {};
+  const src =
+    curve.source === "llm" ? "由人设生成" : curve.source === "manual" ? "手动保存" : "内置默认";
+  const info = $("favour-curve-info");
+  if (info) {
+    info.textContent =
+      `来源：${src}　生成时间：${curve.generated_at || DASH}` +
+      (curve.notes ? `　取向：${curve.notes}` : "");
+  }
+  const box = $("favour-bands");
+  if (box) {
+    const bands = Array.isArray(curve.bands)
+      ? [...curve.bands].sort((a, b) => b.min - a.min)
+      : [];
+    box.innerHTML = bands
+      .map(
+        (b) =>
+          `<span class="band-chip"><b>${esc(b.name)}</b> ≥ ${b.min}` +
+          `<span class="band-desc">${esc(b.desc || "")}</span></span>`,
+      )
+      .join("");
+  }
+  const dbox = $("favour-deltas");
+  if (dbox) {
+    const deltas = curve.deltas || {};
+    dbox.innerHTML = Object.keys(DELTA_LABELS)
+      .map((k) => {
+        const v = deltas[k];
+        const rng = Array.isArray(v) ? `${v[0]} ~ ${v[1]}` : DASH;
+        return `<span class="delta-chip">${DELTA_LABELS[k]} <b>${rng}</b></span>`;
+      })
+      .join("");
+  }
+  drawFavourChart(data);
+}
+
+function cssVar(name, fallback) {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function drawFavourChart(data) {
+  const cv = $("favour-chart");
+  if (!cv || !cv.getContext) return;
+  const ctx = cv.getContext("2d");
+  const W = cv.width;
+  const H = cv.height;
+  const padL = 44;
+  const padR = 16;
+  const padT = 16;
+  const padB = 26;
+  const x0 = padL;
+  const x1 = W - padR;
+  const y0 = padT;
+  const y1 = H - padB;
+
+  const fg = cssVar("--fg", "#1c1f24");
+  const muted = cssVar("--muted", "#6b7280");
+  const line = cssVar("--line", "#e3e6ea");
+  const accent = cssVar("--accent", "#2f6fed");
+
+  ctx.clearRect(0, 0, W, H);
+  const toY = (v) => y1 - ((Math.max(-100, Math.min(100, v)) + 100) / 200) * (y1 - y0);
+
+  // 网格与刻度
+  ctx.font = "11px -apple-system, sans-serif";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  for (const v of [100, 50, 0, -50, -100]) {
+    const y = toY(v);
+    ctx.strokeStyle = line;
+    ctx.beginPath();
+    ctx.moveTo(x0, y);
+    ctx.lineTo(x1, y);
+    ctx.stroke();
+    ctx.fillStyle = muted;
+    ctx.fillText(String(v), x0 - 6, y);
+  }
+
+  const curve = (data && data.curve) || {};
+  const items = (data && data.items) || [];
+  const it = items.find((i) => i.key === favourSelected);
+
+  // 档位分界线
+  const bands = Array.isArray(curve.bands) ? curve.bands : [];
+  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = accent;
+  for (const b of bands) {
+    if (typeof b.min !== "number" || b.min < -100 || b.min > 100) continue;
+    const y = toY(b.min);
+    ctx.beginPath();
+    ctx.moveTo(x0, y);
+    ctx.lineTo(x1, y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  const hist = (it && it.history) || [];
+  if (!hist.length) {
+    ctx.fillStyle = muted;
+    ctx.textAlign = "center";
+    ctx.fillText(
+      it ? "这人暂无历史采样（好感还没变化过）" : "先选一个对象",
+      (x0 + x1) / 2,
+      (y0 + y1) / 2,
+    );
+    return;
+  }
+
+  const n = hist.length;
+  const toX = (i) => (n <= 1 ? (x0 + x1) / 2 : x0 + (i / (n - 1)) * (x1 - x0));
+
+  // 折线
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  hist.forEach((p, i) => {
+    const x = toX(i);
+    const y = toY(p.favour);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // 数据点
+  ctx.fillStyle = accent;
+  hist.forEach((p, i) => {
+    const x = toX(i);
+    const y = toY(p.favour);
+    ctx.beginPath();
+    ctx.arc(x, y, 2.6, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // 末点值
+  const last = hist[n - 1];
+  ctx.fillStyle = fg;
+  ctx.textAlign = "right";
+  ctx.textBaseline = "bottom";
+  ctx.fillText(`当前 ${last.favour}`, x1, toY(last.favour) - 4);
+}
+
 function bind() {
   $("refresh")?.addEventListener("click", refresh);
   $("reschedule")?.addEventListener("click", reschedule);
@@ -910,6 +1239,9 @@ function bind() {
   $("sticker-addcat")?.addEventListener("click", addCategory);
   $("sticker-upload")?.addEventListener("click", () => $("sticker-file")?.click());
   $("sticker-classify")?.addEventListener("click", autoClassify);
+  $("favour-refresh")?.addEventListener("click", () => loadFavour(true));
+  $("favour-curve-btn")?.addEventListener("click", () => favourCurveAction("regenerate"));
+  $("favour-curve-reset")?.addEventListener("click", () => favourCurveAction("reset"));
   $("sticker-file")?.addEventListener("change", (e) => {
     const arr = Array.from(e.target.files || []);
     e.target.value = "";

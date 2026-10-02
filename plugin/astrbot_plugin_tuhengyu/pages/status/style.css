@@ -653,3 +653,95 @@ body.drag-active {
   color: var(--muted);
   font-size: 12px;
 }
+
+/* ==================== 好感度页签 ==================== */
+.favour-table td,
+.favour-table th {
+  vertical-align: top;
+}
+.favour-row {
+  cursor: pointer;
+}
+.favour-row.selected {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.favour-row.editing {
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+.f-nick {
+  font-weight: 600;
+}
+.f-uid {
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-all;
+}
+.f-favour {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.f-band {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.f-time {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.f-ops {
+  white-space: nowrap;
+}
+.f-op {
+  padding: 3px 8px;
+  font-size: 12px;
+  margin: 1px 2px 1px 0;
+}
+.f-in {
+  width: 100%;
+  min-width: 60px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+.favour-chart-wrap {
+  margin: 10px 0 12px;
+  overflow-x: auto;
+}
+#favour-chart {
+  width: 100%;
+  max-width: 820px;
+  height: auto;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.favour-bands,
+.favour-deltas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.band-chip,
+.delta-chip {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  background: var(--bg);
+}
+.band-desc {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  max-width: 220px;
+}
+.delta-chip b {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}

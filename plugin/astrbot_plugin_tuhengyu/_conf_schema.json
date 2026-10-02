@@ -244,6 +244,18 @@
         "description": "每个群 / 私聊独立计算",
         "hint": "开：同一个用户在不同群里各有一份状态。关（默认）：全局唯一。",
         "default": false
+      },
+      "curve_enabled": {
+        "type": "bool",
+        "description": "好感变化曲线由人设生成",
+        "hint": "开（默认）：按当前 AstrBot 人格调一次模型，生成这个角色专属的好感升降节奏与分档，之后人设不变就不重算。关：一律用内置默认幅度。",
+        "default": true
+      },
+      "curve_model": {
+        "type": "string",
+        "description": "生成曲线用哪个模型",
+        "hint": "留空则用 AstrBot 当前默认模型。",
+        "default": ""
       }
     }
   },

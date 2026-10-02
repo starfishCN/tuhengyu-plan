@@ -125,3 +125,45 @@ async def generate_schedule_text(context, persona: str, configured_id: str = "")
         logger.warning(f"[图恒宇] 生成作息失败：{e}")
         return ""
     return getattr(resp, "completion_text", "") or ""
+
+
+# ---------- 好感度变化曲线生成 ----------
+
+CURVE_SYSTEM_PROMPT = (
+    "你在帮一个角色设计「好感度变化曲线」——即这个角色对人好感的升降节奏与分档。"
+    "只输出 JSON，不要解释，不要 markdown 代码块。"
+)
+
+CURVE_PROMPT = """按下面这个人设，设计她/他对一个人的好感度如何随互动变化。
+
+人设：
+{persona}
+
+要求（贴合人设的性子，别照抄通用模板）：
+- bands：好感度分档（升序由低到高，min 是区间下界，-100 ~ 100）。档名与语气描述要贴人设，
+  比如傲娇的人「亲密」档可能嘴硬心软，冷淡的人档与档之间跨度大、升温慢。
+- deltas：各类互动一次的好感变化幅度，[下限, 上限] 两个整数：
+  positive=普通正面互动，affection=亲密/示好互动，negative=普通负面互动，insult=冒犯/辱骂。
+  难亲近的人 positive/affection 上限小、negative/insult 下限更狠；热情的人反之。
+- notes：一两句话说明这份曲线的性格取向（给主人看）。
+
+只输出 JSON，格式：
+{{"bands": [{{"min": -100, "name": "厌恶", "desc": "..."}}, {{"min": 0, "name": "中立", "desc": "..."}}, {{"min": 60, "name": "亲密", "desc": "..."}}], "deltas": {{"positive": [1, 3], "affection": [2, 5], "negative": [-10, -3], "insult": [-8, -4]}}, "notes": "..."}}"""
+
+
+async def generate_curve_text(context, persona: str, configured_id: str = "") -> str:
+    """让模型按人设推一份「好感度变化曲线」JSON。失败返回空串。"""
+    provider_id = await resolve_provider_id(context, configured_id)
+    if not provider_id:
+        logger.warning("[图恒宇] 没有可用的模型，无法生成好感度曲线。")
+        return ""
+    try:
+        resp = await context.llm_generate(
+            chat_provider_id=provider_id,
+            prompt=CURVE_PROMPT.format(persona=persona),
+            system_prompt=CURVE_SYSTEM_PROMPT,
+        )
+    except Exception as e:
+        logger.warning(f"[图恒宇] 生成好感度曲线失败：{e}")
+        return ""
+    return getattr(resp, "completion_text", "") or ""
