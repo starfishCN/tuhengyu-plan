@@ -3,7 +3,7 @@
 给 bot「完整的一生」。让人设不只是「会说话」，而是**有自己的作息、会自己发空间、会发表情包、会怼人、偶尔在群里插一句**。
 
 - 包名：`astrbot_plugin_tuhengyu`
-- 版本：0.2.28
+- 版本：0.3.0
 - 支持平台：`aiocqhttp`（OneBot v11）
 - 许可：待定（见项目 README）
 
@@ -49,7 +49,7 @@ docker restart astrbot
 启动成功的话，日志里会出现：
 
 ```
-Plugin astrbot_plugin_tuhengyu (0.2.28) by starfishCN
+Plugin astrbot_plugin_tuhengyu (0.3.0) by starfishCN
 [图恒宇] 生活调度器已启动。
 ```
 
