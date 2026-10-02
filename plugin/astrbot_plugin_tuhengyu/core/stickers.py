@@ -88,32 +88,60 @@ class StickerLibrary:
         """按标签分组返回副本（供页面展示，外部改动不影响索引）。"""
         return {lab: list(paths) for lab, paths in self._index.items()}
 
+    def dirs(self) -> list[str]:
+        """所有分类目录名（含空目录）。用于展示与拖拽落点。
+
+        空分类必须留得住：把某分类的最后一张图拖走后，目录仍在、落点也必须在，
+        否则拖出去就拖不回来。
+        """
+        names: set[str] = set()
+        for root in self.roots:
+            if not root.is_dir():
+                continue
+            try:
+                children = list(root.iterdir())
+            except OSError:
+                continue
+            for child in children:
+                try:
+                    if child.is_dir() and not child.name.startswith("."):
+                        names.add(child.name)
+                except OSError:
+                    continue
+        return sorted(names)
+
     def groups_by_intent(self) -> dict[str, list[tuple[str, Path]]]:
-        """展示用分组：按意图 / 分类归组。
+        """展示用分组：按意图 / 分类归组（**含空分类**）。
 
         规则：
           - 目录名是内置意图名（拒绝 / 道歉 / …）→ 该类目
-          - default / collected → 「其他」
+          - default / collected → 「其他」（仅在有图时出现）
           - 其余目录名（用户在 WebUI 里自建的分类）→ 各自独立一类
-        顺序：内置意图 →（用户分类，按名）→「其他」。空类目不返回。
+          - **存在的空目录也返回**（items 为空）：这样页面留得住落点，能把图再拖回去
+        顺序：内置意图 →（用户分类，按名）→「其他」。
         """
+        dirs = set(self.dirs())
         order_int = [lab for lab in intent_labels() if lab != INTENT_FALLBACK]
         out: dict[str, list[tuple[str, Path]]] = {}
         for lab in order_int:
             items = [(lab, p) for p in self._index.get(lab, [])]
-            if items:
+            if items or lab in dirs:
                 out[lab] = items
         extras: dict[str, list[tuple[str, Path]]] = {}
-        others: list[tuple[str, Path]] = []
-        for lab, paths in self._index.items():
-            if lab in order_int:
+        for lab in sorted(dirs):
+            if lab in order_int or lab in SYSTEM_LABELS:
                 continue
-            if lab in SYSTEM_LABELS:
-                others.extend((lab, p) for p in paths)
-            else:
-                extras[lab] = [(lab, p) for p in paths]
+            extras[lab] = [(lab, p) for p in self._index.get(lab, [])]
+        # 兜底：索引里有图、但目录扫描没覆盖到的（多根 / 异常情况）
+        for lab, paths in self._index.items():
+            if lab in order_int or lab in SYSTEM_LABELS or lab in extras:
+                continue
+            extras[lab] = [(lab, p) for p in paths]
         for lab in sorted(extras):
             out[lab] = extras[lab]
+        others: list[tuple[str, Path]] = []
+        for lab in SYSTEM_LABELS:
+            others.extend((lab, p) for p in self._index.get(lab, []))
         if others:
             out[INTENT_FALLBACK] = others
         return out

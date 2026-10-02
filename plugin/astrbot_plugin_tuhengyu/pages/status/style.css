@@ -614,3 +614,51 @@ body.drag-active {
 .gallery-group.drop-hover .gallery-head {
   color: var(--accent);
 }
+
+/* ---------- 表情包：暂存 / 保存归类 ---------- */
+
+.sticker-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sticker-dirty {
+  color: var(--warn);
+  font-size: 12px;
+}
+
+/* 已拖动、尚未保存的卡片：橙色描边 + 角标 */
+.sticker-card.pending {
+  position: relative;
+  border-color: var(--warn);
+}
+
+.sticker-card.pending::before {
+  content: "待保存";
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 2;
+  background: var(--warn);
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 5px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* 空分类的落点占位块：既提示又可接拖拽 */
+.gallery-empty {
+  grid-column: 1 / -1;
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}

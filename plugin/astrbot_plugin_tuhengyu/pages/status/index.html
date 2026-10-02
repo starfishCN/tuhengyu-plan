@@ -162,11 +162,16 @@
           <p class="set-tip">
             按分类展示，例：<code>stickers/拒绝/a.png</code>。内置意图类：<code>拒绝 / 道歉 / 攻击 / 亲昵 / 赞同 / 提问 / 认输 / 害羞</code>；
             也可在下面新建自定义分类（自定义类名也会作为识图的候选）。散图与对话里收到的图归「其他」。bot 回复时按这条回复的意图，从同名目录里挑图。
-            <b>把任意一张卡片拖到别的分类上即可手动归类</b>；拖进「其他」＝移回散图区。手动拖动不调模型、不耗 token。
+            <b>把卡片拖到别的分类上即可归类</b>；拖进「其他」＝移回散图区。
+            拖动只是暂存，改完点<b>「保存归类」</b>才真正写入（一次提交、只刷新一次）。手动归类不调模型、不耗 token。
           </p>
           <div class="sticker-bar">
             <span id="sticker-summary" class="card-hint">读取中 …</span>
-            <button id="sticker-refresh" class="btn btn-ghost" type="button">刷新</button>
+            <div class="sticker-bar-actions">
+              <span id="sticker-dirty" class="sticker-dirty" hidden></span>
+              <button id="sticker-save" class="btn" type="button" disabled>保存归类</button>
+              <button id="sticker-refresh" class="btn btn-ghost" type="button">刷新</button>
+            </div>
           </div>
           <div class="sticker-tools">
             <label class="sticker-label">上传到

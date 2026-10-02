@@ -258,7 +258,8 @@ function stickerCard(img) {
   card.className = "sticker-card";
   card.dataset.name = img.name || "";
   card.dataset.tag = img.tag || "";
-  card.title = "按住拖到别的分类即可归类";
+  card.dataset.origTag = img.tag || "";
+  card.title = "按住拖到别的分类，再点「保存归类」";
   card.addEventListener("pointerdown", (e) => beginDrag(card, e));
   if (img.b64) {
     const el = document.createElement("img");
@@ -318,6 +319,30 @@ function renderStickers(data) {
     sec.dataset.drop = g.drop || g.label;
     sec.dataset.label = g.label;
     box.appendChild(sec);
+    syncGroup(sec);
+  }
+}
+
+// 空分类也要留得住落点：没有卡片时放一个占位块，既提示又能接拖拽。
+function emptySlot() {
+  const el = document.createElement("div");
+  el.className = "gallery-empty";
+  el.textContent = "拖图到这里";
+  return el;
+}
+
+function syncGroup(sec) {
+  if (!sec) return;
+  const grid = sec.querySelector(".gallery-grid");
+  if (!grid) return;
+  const n = grid.querySelectorAll(".sticker-card").length;
+  const cnt = sec.querySelector(".gallery-count");
+  if (cnt) cnt.textContent = n + " 张";
+  const slot = grid.querySelector(".gallery-empty");
+  if (n === 0) {
+    if (!slot) grid.appendChild(emptySlot());
+  } else if (slot) {
+    slot.remove();
   }
 }
 
@@ -386,34 +411,99 @@ function endDrag() {
     setStickerResult("没有落到分类上，已取消。", false);
     return;
   }
-  const to = sec.dataset.drop || "";
-  const label = sec.dataset.label || to;
-  if (!to) return;
-  if (st.from === to) {
-    setStickerResult("这张图已经在这个分类里了。", false);
-    return;
-  }
-  setStickerResult("正在把 " + st.name + " 移到「" + label + "」…", false);
-  bridge
-    .apiPost("sticker-move", { name: st.name, from: st.from, to })
-    .then((d) => {
-      setStickerResult((d && d.message) || "已移动。", false);
-      stickersLoaded = false;
-      return loadStickers(true);
-    })
-    .catch((err) => setStickerResult("移动失败：" + err.message, true));
+  stageMove(st.card, sec);
 }
 
 window.addEventListener("pointermove", moveDrag, { passive: false });
 window.addEventListener("pointerup", endDrag);
 window.addEventListener("pointercancel", endDrag);
 
+// ==================== 表情包：暂存 → 点「保存归类」一次提交 ====================
+// 拖动只改本地（移动 DOM、更新计数、打脏标记），不发请求；点保存才逐条提交，最后只重载一次。
+// 这样既消除「每拖一张闪一下」，也让空分类在提交前一直留得住落点。
+
+const pendingMoves = new Map(); // 卡片元素 -> { name, from, to, label }
+
+// 「其他」= default + collected 的合并视图，落点都是 default；比较时视作同一处。
+function normTag(tag) {
+  return tag === "default" || tag === "collected" ? "default" : tag;
+}
+
+function updateDirty() {
+  const n = pendingMoves.size;
+  const btn = $("sticker-save");
+  if (btn) btn.disabled = n === 0;
+  const flag = $("sticker-dirty");
+  if (flag) {
+    flag.hidden = n === 0;
+    flag.textContent = "未保存 " + n + " 项";
+  }
+}
+
+function stageMove(card, sec) {
+  const to = sec.dataset.drop || "";
+  if (!to) return;
+  const from = card.dataset.origTag || card.dataset.tag || "";
+  const label = sec.dataset.label || to;
+  const srcSec = card.closest(".gallery-group");
+  const grid = sec.querySelector(".gallery-grid");
+  if (grid && card.parentElement !== grid) grid.appendChild(card);
+  card.dataset.tag = to;
+  if (normTag(from) === to) {
+    // 拖回原位：撤销这张卡的暂存
+    pendingMoves.delete(card);
+    card.classList.remove("pending");
+  } else {
+    pendingMoves.set(card, { name: card.dataset.name || "", from, to, label });
+    card.classList.add("pending");
+  }
+  syncGroup(srcSec);
+  syncGroup(sec);
+  updateDirty();
+}
+
+async function saveStickers() {
+  const list = Array.from(pendingMoves.values());
+  if (!list.length) return;
+  const btn = $("sticker-save");
+  if (btn) btn.disabled = true;
+  setStickerResult("正在保存 " + list.length + " 项归类 …", false);
+  let ok = 0;
+  let fail = 0;
+  let lastErr = "";
+  for (const mv of list) {
+    try {
+      await bridge.apiPost("sticker-move", { name: mv.name, from: mv.from, to: mv.to });
+      ok += 1;
+    } catch (e) {
+      fail += 1;
+      lastErr = e.message;
+    }
+  }
+  pendingMoves.clear();
+  updateDirty();
+  stickersLoaded = false;
+  await loadStickers(true);
+  let msg = "保存完成：成功 " + ok + " 项";
+  if (fail) msg += "，失败 " + fail + " 项（" + lastErr + "）";
+  setStickerResult(msg + "。", fail > 0);
+}
+
 let stickersLoaded = false;
 
 async function loadStickers(force) {
   if (stickersLoaded && !force) return;
+  if (force && pendingMoves.size) {
+    const go = window.confirm(
+      "有 " + pendingMoves.size + " 项未保存的归类，刷新会丢弃。继续刷新？",
+    );
+    if (!go) return;
+  }
   const box = $("sticker-gallery");
   if (box) box.innerHTML = '<div class="empty">读取中 …</div>';
+  // 重载会重建 DOM，旧的暂存卡片引用随之失效
+  pendingMoves.clear();
+  updateDirty();
   try {
     const data = await bridge.apiGet("stickers");
     stickersLoaded = true;
@@ -827,6 +917,7 @@ function bind() {
   $("test-moment")?.addEventListener("click", testMoment);
   $("sticker-reload")?.addEventListener("click", stickerReload);
   $("sticker-refresh")?.addEventListener("click", () => loadStickers(true));
+  $("sticker-save")?.addEventListener("click", saveStickers);
   $("sticker-addcat")?.addEventListener("click", addCategory);
   $("sticker-upload")?.addEventListener("click", () => $("sticker-file")?.click());
   $("sticker-classify")?.addEventListener("click", autoClassify);
