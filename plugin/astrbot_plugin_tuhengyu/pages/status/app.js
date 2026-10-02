@@ -1052,8 +1052,8 @@ function favourRow(it, curve) {
   ops.className = "f-ops";
   ops.append(
     fBtn("编辑", "btn btn-ghost f-op", () => startEditFavour(tr, it)),
-    fBtn("重置", "btn btn-ghost f-op", () => doFavourReset(it, "reset")),
-    fBtn("删除", "btn btn-ghost f-op", () => doFavourReset(it, "delete")),
+    fBtn("重置", "btn btn-ghost f-op f-danger", () => doFavourReset(it, "reset")),
+    fBtn("删除", "btn btn-ghost f-op f-danger", () => doFavourReset(it, "delete")),
   );
   if (it.hold_until) ops.append(fBtn("解锁", "btn btn-ghost f-op", () => unlockFavour(it)));
   tr.appendChild(ops);
@@ -1121,7 +1121,11 @@ function doFavourReset(it, mode) {
     );
     return;
   }
-  runFavourReset(it, mode);
+  // 重置是破坏性的（好感 / 印象 / 关系全部回初始值，手改保护一并清掉），也要确认一次
+  setFavourConfirm(
+    `把「${shortName(it)}」的好感度、印象、关系全部重置为初始值？手改保护也会一起清掉。`,
+    () => runFavourReset(it, "reset"),
+  );
 }
 
 async function runFavourReset(it, mode) {

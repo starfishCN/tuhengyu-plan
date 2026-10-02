@@ -757,6 +757,11 @@ body.drag-active {
   color: var(--warn);
   font-size: 13px;
 }
+/* display:flex 会盖掉 hidden 属性的默认 display:none，必须显式兜一条，
+   否则没触发确认时页面上会挂一个空框。 */
+.confirm-bar[hidden] {
+  display: none;
+}
 .confirm-bar .confirm-text {
   flex: 1 1 200px;
 }
@@ -767,5 +772,9 @@ body.drag-active {
 .f-hold {
   margin-top: 2px;
   font-size: 11px;
+  color: var(--warn, #b45309);
+}
+/* 破坏性操作按钮：与「编辑」区分开，降低误触 */
+.f-danger {
   color: var(--warn, #b45309);
 }

@@ -377,6 +377,11 @@ class WebRoutes:
         )
         if state is None:
             return error_response("无效的 key", status_code=400)
+        self.logger.info(
+            f"[图恒宇] 页签修改 {key}: favour={state.get('favour')} "
+            f"attitude={state.get('attitude')!r} relationship={state.get('relationship')!r} "
+            f"手改保护={state.get('manual_fields') or []}。"
+        )
         return json_response({"ok": True, "key": key, "state": state})
 
     async def page_favour_reset(self):
@@ -397,6 +402,7 @@ class WebRoutes:
         else:
             self._favour().reset_by_key(key)
             msg = "已重置该用户好感度"
+        self.logger.info(f"[图恒宇] 页签{msg}：{key}（mode={mode}）。")
         return json_response({"ok": True, "key": key, "mode": mode, "message": msg})
 
     async def page_favour_curve(self):

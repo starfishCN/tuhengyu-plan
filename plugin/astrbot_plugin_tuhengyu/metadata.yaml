@@ -1,7 +1,7 @@
 name: astrbot_plugin_tuhengyu
 display_name: 图恒宇计划
 desc: 给 bot 完整的一生 —— 人设驱动的六项生活化行为：作息与虚拟行动 / 发 QQ 空间 / 表情包 / 好感度 / 戳一戳 / 群聊主动插话。独立自研，不依赖第三方好感度插件。
-version: 0.3.12
+version: 0.3.13
 author: starfishCN
 repo: https://gitee.com/starfishCN/tuhengyu-plan
 entry: main.py
