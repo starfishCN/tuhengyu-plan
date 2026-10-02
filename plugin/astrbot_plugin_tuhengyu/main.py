@@ -724,18 +724,42 @@ class TuhengyuPlugin(Star):
 
     @filter.command("图恒宇插话")
     async def test_proactive(self, event: AstrMessageEvent):
-        """手动试一次主动插话（忽略概率、冷却与上限），用来验证链路。"""
-        sec = self._proactive_cfg()
+        """管理员私聊指令：/图恒宇插话 群号 —— 让它在指定群接一句。
+
+        走管理员私聊通道：群里不响应，回执也只落在私聊，
+        免得把运维动作暴露在群里。忽略概率、冷却与每日上限，只用于验证链路。
+        """
         try:
-            gid = str(event.get_group_id() or "")
+            if not event.is_private_chat():
+                return  # 群里不响应
         except Exception:
-            gid = ""
-        if not gid:
-            yield event.plain_result("[图恒宇] 这条指令要在群里用。")
+            pass
+        try:
+            is_admin = bool(event.is_admin())
+        except Exception:
+            is_admin = False
+        if not is_admin:
+            yield event.plain_result("[图恒宇] 该指令仅管理员可用。")
             return
+
+        import re
+
+        raw = str(event.message_str or "").strip()
+        gids = re.findall(r"\d{5,}", raw)
+        sec = self._proactive_cfg()
+        if not gids:
+            known = [g for g, d in self._groups.items() if d.get("msgs")]
+            tip = (
+                "[图恒宇] 用法：/图恒宇插话 群号\n"
+                f"已知群：{'、'.join(known) if known else '（还没记到任何群，先在群里聊两句）'}"
+            )
+            yield event.plain_result(tip)
+            return
+
+        gid = gids[0]
         g = self._groups.get(gid)
         if not g or not g.get("msgs"):
-            yield event.plain_result("[图恒宇] 还没记到本群的聊天，先说两句再试。")
+            yield event.plain_result(f"[图恒宇] 群 {gid} 还没记录到聊天，先在群里聊两句再试。")
             return
         st = self._scheduler.schedule.state_at() if self._scheduler else None
         try:
@@ -754,7 +778,7 @@ class TuhengyuPlugin(Star):
             except Exception as e:
                 self.logger.warning(f"[图恒宇] 测试插话发送异常：{e}")
         yield event.plain_result(
-            f"[图恒宇] 已发送：{reply}" if ok else "[图恒宇] 发送失败，看日志。"
+            f"[图恒宇] 已发送到群 {gid}：{reply}" if ok else "[图恒宇] 发送失败，看日志。"
         )
 
     # ---------- token 诊断 ----------
