@@ -970,6 +970,34 @@ function clockLabel() {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
+function setFavourConfirm(message, onYes) {
+  const bar = $("favour-confirm");
+  if (!bar) return;
+  bar.innerHTML = "";
+  if (!message) {
+    bar.hidden = true;
+    return;
+  }
+  bar.hidden = false;
+  const span = document.createElement("span");
+  span.className = "confirm-text";
+  span.textContent = message;
+  const yes = document.createElement("button");
+  yes.type = "button";
+  yes.className = "btn";
+  yes.textContent = "确认";
+  const no = document.createElement("button");
+  no.type = "button";
+  no.className = "btn btn-ghost";
+  no.textContent = "取消";
+  yes.addEventListener("click", () => {
+    setFavourConfirm("");
+    onYes();
+  });
+  no.addEventListener("click", () => setFavourConfirm(""));
+  bar.append(span, yes, no);
+}
+
 function refreshFavour(silent) {
   const btn = $("favour-refresh");
   if (btn && btn.disabled) return;
@@ -1071,10 +1099,17 @@ async function saveEditFavour(tr, it) {
   }
 }
 
-async function doFavourReset(it, mode) {
-  if (mode === "delete" && !window.confirm(`删除「${shortName(it)}」的全部好感记录？`)) {
+function doFavourReset(it, mode) {
+  if (mode === "delete") {
+    setFavourConfirm(`删除「${shortName(it)}」的全部好感记录？此操作不可撤销。`, () =>
+      runFavourReset(it, mode),
+    );
     return;
   }
+  runFavourReset(it, mode);
+}
+
+async function runFavourReset(it, mode) {
   try {
     const d = await bridge.apiPost("favour-reset", { key: it.key, mode });
     await loadFavour(true);
@@ -1085,6 +1120,17 @@ async function doFavourReset(it, mode) {
 }
 
 function favourCurveAction(action) {
+  if (action === "reset") {
+    // 破坏性操作：先确认一次再执行
+    setFavourConfirm("恢复内置默认曲线？当前由人设生成的档位与幅度会被覆盖。", () =>
+      doFavourCurveAction("reset"),
+    );
+    return;
+  }
+  doFavourCurveAction(action);
+}
+
+function doFavourCurveAction(action) {
   const id = action === "reset" ? "favour-curve-reset" : "favour-curve-btn";
   const btn = $(id);
   if (btn && btn.disabled) return;

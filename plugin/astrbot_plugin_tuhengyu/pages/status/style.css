@@ -745,3 +745,22 @@ body.drag-active {
   color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
+.confirm-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  color: var(--warn);
+  font-size: 13px;
+}
+.confirm-bar .confirm-text {
+  flex: 1 1 200px;
+}
+.confirm-bar .btn {
+  padding: 3px 10px;
+  font-size: 12px;
+}
