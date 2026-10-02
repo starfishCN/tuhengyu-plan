@@ -194,6 +194,9 @@ async function refresh() {
   } catch (e) {
     showNotice(`读取状态失败：${e.message}`, true);
   }
+  // 顶部「刷新」在好感度页签时一并刷新好感度数据（否则看着像没反应）
+  const active = document.querySelector(".tab.active");
+  if (active && active.dataset.tab === "favour") refreshFavour(true);
 }
 
 async function withButton(id, busyLabel, fn) {
@@ -961,6 +964,27 @@ async function loadFavour(force) {
   }
 }
 
+function clockLabel() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+function refreshFavour(silent) {
+  const btn = $("favour-refresh");
+  if (btn && btn.disabled) return;
+  if (btn) btn.disabled = true;
+  if (!silent) setFavourResult("正在刷新……");
+  return Promise.resolve(loadFavour(true))
+    .then(() => {
+      if (!silent) setFavourResult(`已刷新 · ${clockLabel()}`);
+    })
+    .catch((e) => setFavourResult(`刷新失败：${e.message}`, true))
+    .finally(() => {
+      if (btn) btn.disabled = false;
+    });
+}
+
 function renderFavour(data) {
   const tbody = $("favour-list");
   if (!tbody) return;
@@ -1053,8 +1077,8 @@ async function doFavourReset(it, mode) {
   }
   try {
     const d = await bridge.apiPost("favour-reset", { key: it.key, mode });
-    setFavourResult(d.message || "已处理。");
     await loadFavour(true);
+    setFavourResult(d.message || "已处理。");
   } catch (e) {
     setFavourResult(`操作失败：${e.message}`, true);
   }
@@ -1062,17 +1086,21 @@ async function doFavourReset(it, mode) {
 
 function favourCurveAction(action) {
   const id = action === "reset" ? "favour-curve-reset" : "favour-curve-btn";
-  const label =
-    action === "reset" ? "正在恢复默认曲线……" : "正在读人设并生成曲线（要调一次模型）……";
-  return withButton(id, label, async () => {
-    try {
-      const d = await bridge.apiPost("favour-curve", { action });
+  const btn = $(id);
+  if (btn && btn.disabled) return;
+  if (btn) btn.disabled = true;
+  setFavourResult(
+    action === "reset" ? "正在恢复默认曲线……" : "正在读人设并生成曲线（要调一次模型）……",
+  );
+  bridge.apiPost("favour-curve", { action })
+    .then((d) => {
       setFavourResult(d.message || "完成。");
-      await loadFavour(true);
-    } catch (e) {
-      setFavourResult(`操作失败：${e.message}`, true);
-    }
-  });
+      return loadFavour(true);
+    })
+    .catch((e) => setFavourResult(`操作失败：${e.message}`, true))
+    .finally(() => {
+      if (btn) btn.disabled = false;
+    });
 }
 
 const DELTA_LABELS = {
@@ -1132,8 +1160,16 @@ function drawFavourChart(data) {
   const cv = $("favour-chart");
   if (!cv || !cv.getContext) return;
   const ctx = cv.getContext("2d");
-  const W = cv.width;
-  const H = cv.height;
+  // 按设备像素比放大画布，避免高分屏下糊（CSS 尺寸不变，只提高绘制分辨率）
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = cv.clientWidth || 700;
+  const cssH = Math.max(180, Math.round((cssW * 260) / 820));
+  cv.width = Math.round(cssW * dpr);
+  cv.height = Math.round(cssH * dpr);
+  cv.style.height = cssH + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = cssW;
+  const H = cssH;
   const padL = 44;
   const padR = 16;
   const padT = 16;
@@ -1239,9 +1275,12 @@ function bind() {
   $("sticker-addcat")?.addEventListener("click", addCategory);
   $("sticker-upload")?.addEventListener("click", () => $("sticker-file")?.click());
   $("sticker-classify")?.addEventListener("click", autoClassify);
-  $("favour-refresh")?.addEventListener("click", () => loadFavour(true));
+  $("favour-refresh")?.addEventListener("click", () => refreshFavour());
   $("favour-curve-btn")?.addEventListener("click", () => favourCurveAction("regenerate"));
   $("favour-curve-reset")?.addEventListener("click", () => favourCurveAction("reset"));
+  window.addEventListener("resize", () => {
+    if (favourData) drawFavourChart(favourData);
+  });
   $("sticker-file")?.addEventListener("change", (e) => {
     const arr = Array.from(e.target.files || []);
     e.target.value = "";
