@@ -582,10 +582,11 @@ class TuhengyuPlugin(Star):
 
     @filter.event_message_type(EventMessageType.ALL)
     async def watch_group(self, event: AstrMessageEvent):
-        """记住群里最近说了什么，供主动插话接话用。只记群聊、只记文字。"""
-        sec = self._proactive_cfg()
-        if not sec.get("enabled", False):
-            return
+        """记住群里最近说了什么，供主动插话接话用。只记群聊、只记文字。
+
+        记录常开：`enabled` 只控制「自动插话」这个行为，不控制观察。
+        否则刚把开关打开的瞬间手里一条上下文都没有，谁也接不上。
+        """
         try:
             if event.is_private_chat():
                 return

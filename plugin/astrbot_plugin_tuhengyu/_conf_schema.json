@@ -303,7 +303,7 @@
       "enabled": {
         "type": "bool",
         "description": "启用主动插话",
-        "hint": "关闭时也不记录群聊内容。默认关。",
+            "hint": "默认关。关闭时不会自动插话，但仍会记录群聊（供 /图恒宇插话 手动测试用）。",
         "default": false
       },
       "probability": {
