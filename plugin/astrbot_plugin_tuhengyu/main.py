@@ -44,6 +44,7 @@ class TuhengyuPlugin(Star):
         self._task = None
         self._favour_store = None
         self._poke_log = {}  # 戳一戳：键 → [时间戳]，用于连戳计数与冷却
+        self._bridge_obj = None  # OneBot 桥（回戳用 send_poke 动作）
         # 注册插件页面的后端 API（页面在 pages/status/）。
         try:
             context.register_web_api(
@@ -332,6 +333,34 @@ class TuhengyuPlugin(Star):
         sec = self.config.get("poke") if isinstance(self.config, dict) else None
         return sec if isinstance(sec, dict) else {}
 
+    def _bridge(self):
+        """取 OneBot 桥（懒加载并缓存）。"""
+        if self._bridge_obj is None:
+            try:
+                from .core.onebot import OneBotBridge
+
+                self._bridge_obj = OneBotBridge(self.context)
+            except Exception as e:
+                self.logger.warning(f"[图恒宇] 初始化 OneBot 桥失败：{e}")
+                return None
+        return self._bridge_obj
+
+    async def _send_poke(self, uid: str, group: bool, group_id: str = "") -> bool:
+        """经协议端动作回戳一下。
+
+        注意：不走 poke 消息段。现行协议端（SnowLuma）的 poke 段仅允许私聊、
+        且必须是唯一段，群聊直接判 UNSENDABLE_TYPE 拒收；正解是 send_poke 动作，
+        user_id 必填，群聊另带 group_id，由协议端自行路由群/私聊。
+        """
+        bridge = self._bridge()
+        if bridge is None:
+            return False
+        params = {"user_id": uid}
+        if group and group_id:
+            params["group_id"] = group_id
+        resp = await bridge.call("send_poke", **params)
+        return resp is not None
+
     def _poke_touch(self, key: str, now: float, window: float, cooldown: float) -> tuple[int, bool]:
         """记一次戳，返回 (含本次的窗口内次数, 是否在冷却中)。"""
         prev = [t for t in self._poke_log.get(key, []) if now - t <= max(window, cooldown)]
@@ -411,6 +440,10 @@ class TuhengyuPlugin(Star):
             group = not event.is_private_chat()
         except Exception:
             group = False
+        try:
+            group_id = str(event.get_group_id() or "")
+        except Exception:
+            group_id = ""
 
         def _int(key: str, default: int) -> int:
             try:
@@ -457,12 +490,8 @@ class TuhengyuPlugin(Star):
             return
 
         if reaction.poke_back():
-            try:
-                from astrbot.api.event import MessageChain
-
-                await event.send(MessageChain([Poke(id=uid)]))
-            except Exception as e:
-                self.logger.warning(f"[图恒宇] 回戳失败（平台可能不吃 poke 段）：{e}")
+            if not await self._send_poke(uid, group, group_id):
+                self.logger.warning("[图恒宇] 回戳失败：协议端未接受 send_poke 动作。")
 
         if not reaction.speak():
             return
