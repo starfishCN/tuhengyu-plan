@@ -766,9 +766,11 @@ class TuhengyuPlugin(Star):
             max_chars = int(sec.get("max_chars", 20))
         except (TypeError, ValueError):
             max_chars = 20
-        reply = await self._proactive_text(g["msgs"][-10:], st, max_chars, sec)
+        recent = g["msgs"][-10:]
+        seen = "\n".join(f"{i + 1}. {mm[1]}：{mm[2]}" for i, mm in enumerate(recent[-5:]))
+        reply = await self._proactive_text(recent, st, max_chars, sec)
         if not reply:
-            yield event.plain_result("[图恒宇] 没生成出能接的一句。")
+            yield event.plain_result("[图恒宇] 没生成出能接的一句。\n它看到的最近几条：\n" + seen)
             return
         bridge = self._bridge()
         ok = False
@@ -777,9 +779,8 @@ class TuhengyuPlugin(Star):
                 ok = await bridge.call_ok("send_group_msg", group_id=int(gid), message=reply)
             except Exception as e:
                 self.logger.warning(f"[图恒宇] 测试插话发送异常：{e}")
-        yield event.plain_result(
-            f"[图恒宇] 已发送到群 {gid}：{reply}" if ok else "[图恒宇] 发送失败，看日志。"
-        )
+        head = f"[图恒宇] 已发送到群 {gid}：{reply}" if ok else "[图恒宇] 发送失败，看日志。"
+        yield event.plain_result(head + "\n它看到的最近几条：\n" + seen)
 
     # ---------- token 诊断 ----------
     # 折算口径：中文 1 token ≈ 2.06 字符（实测 7994 字符 ≈ 3876 token）。
