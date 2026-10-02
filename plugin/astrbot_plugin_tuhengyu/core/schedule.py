@@ -127,7 +127,7 @@ class Schedule:
         if not os.path.exists(self.path):
             return None
         try:
-            with open(self.path, encoding="utf-8") as f:
+            with open(self.path, encoding="utf-8-sig") as f:
                 d = json.load(f)
             return d if isinstance(d, dict) else None
         except (OSError, json.JSONDecodeError) as e:

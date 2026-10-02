@@ -1,4 +1,4 @@
-﻿{
+{
   "enabled": {
     "description": "是否启用插件（关掉则不启动调度器，也不参与对话）",
     "type": "bool",

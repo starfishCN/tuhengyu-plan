@@ -1,8 +1,10 @@
-// 图恒宇 · 控制台页面（状态 / 操作 / 设置 三页签）
+// 图恒宇 · 控制台页面（状态 / 空间 / 表情包 / 好感度 / 设置 五页签，设置永远排最后）
 // 经 AstrBot 注入的 window.AstrBotPluginPage bridge 与后端通信：
 //   apiGet("status")          读取运行状态
 //   apiPost("reschedule")     重算作息
-//   apiPost("test-moment")    立即发一条空间动态
+//   apiPost("test-moment")    立即发一条空间动态（模型生成）
+//   apiPost("moment-publish") 手动发一条空间动态（自定义内容，不经模型）
+//   apiGet("moment-recent")   回读最近空间动态
 //   apiPost("sticker-reload") 重扫表情包目录
 //   apiGet("settings")        读设置（schema + 当前值 + 下拉选项）
 //   apiPost("settings")       保存设置
@@ -123,7 +125,7 @@ function render(data) {
     } else if (data.schedule_error) {
       msg = `作息没能按人设生成（${data.schedule_error}）。常见原因：AstrBot 里没有可用的对话模型，或模型调用报错 —— 看日志里的 [图恒宇] 行。`;
     } else if (data.persona_pending) {
-      msg = "检测到人设与盘上的作息对不上（换过人格），去「操作」页点「重算作息」。";
+      msg = "检测到人设与盘上的作息对不上（换过人格），去「状态」页点「重算作息」。";
     }
     note.hidden = !msg;
     note.textContent = msg;
@@ -220,6 +222,7 @@ function switchTab(name) {
     p.classList.toggle("active", p.id === "pane-" + name);
   }
   if (name === "stickers") loadStickers();
+  if (name === "space") loadMomentRecent();
   if (name === "favour") loadFavour();
 }
 
@@ -904,6 +907,124 @@ function stickerReload() {
   });
 }
 
+// ==================== 空间：手动发一条 + 回读最近动态 ====================
+
+const MOMENT_LABEL = "发布";
+const MOMENT_CONFIRM_LABEL = "再点一次确认发布";
+let momentArmed = false;
+let momentArmTimer = null;
+
+function disarmMoment() {
+  momentArmed = false;
+  if (momentArmTimer) {
+    clearTimeout(momentArmTimer);
+    momentArmTimer = null;
+  }
+  const btn = $("moment-publish");
+  if (btn) btn.textContent = MOMENT_LABEL;
+}
+
+function setMomentResult(message, isError) {
+  const node = $("moment-result");
+  if (!node) return;
+  if (!message) {
+    node.hidden = true;
+    node.textContent = "";
+    node.classList.remove("err");
+    return;
+  }
+  node.hidden = false;
+  node.classList.toggle("err", !!isError);
+  node.textContent = message;
+}
+
+function updateMomentCount() {
+  const ta = $("moment-content");
+  const cnt = $("moment-count");
+  if (ta && cnt) cnt.textContent = ta.value.length + " / 1000";
+}
+
+function publishMoment() {
+  const ta = $("moment-content");
+  const content = ta ? ta.value.trim() : "";
+  if (!content) {
+    setMomentResult("内容为空，写点什么再发。", true);
+    return;
+  }
+  if (!momentArmed) {
+    momentArmed = true;
+    const btn = $("moment-publish");
+    if (btn) btn.textContent = MOMENT_CONFIRM_LABEL;
+    setMomentResult("这会把上面的内容真的发到 QQ 空间。再点一次「发布」确认，8 秒内有效。", true);
+    momentArmTimer = setTimeout(disarmMoment, 8000);
+    return;
+  }
+  disarmMoment();
+  return withButton("moment-publish", "正在发布到空间……", async () => {
+    try {
+      const data = await bridge.apiPost("moment-publish", { content });
+      render(data);
+      const r = (data && data.result) || {};
+      setMomentResult(r.message || (r.ok ? "已发布。" : "发布失败。"), !r.ok);
+      if (r.ok && ta) {
+        ta.value = "";
+        updateMomentCount();
+      }
+      if (r.ok) loadMomentRecent(true);
+    } catch (e) {
+      setMomentResult("发布失败：" + e.message, true);
+    }
+  });
+}
+
+function renderMomentRecent(data) {
+  const box = $("moment-recent-list");
+  const sum = $("moment-recent-summary");
+  if (!box) return;
+  const items = (data && data.items) || [];
+  if (!data || !data.ok) {
+    if (sum) sum.textContent = "读取失败";
+    box.innerHTML = `<div class="empty">${esc((data && data.message) || "读取失败。")}</div>`;
+    return;
+  }
+  if (sum) sum.textContent = items.length ? `最近 ${items.length} 条` : "没有动态";
+  if (!items.length) {
+    box.innerHTML = '<div class="empty">空间里还没读到动态。</div>';
+    return;
+  }
+  box.innerHTML = "";
+  for (const it of items) {
+    const row = document.createElement("div");
+    row.className = "moment-item";
+    const t = document.createElement("div");
+    t.className = "moment-time";
+    t.textContent = it.time || DASH;
+    const c = document.createElement("div");
+    c.className = "moment-text";
+    c.textContent = it.content || "（无文字内容）";
+    row.append(t, c);
+    box.appendChild(row);
+  }
+}
+
+let momentRecentLoaded = false;
+
+async function loadMomentRecent(force) {
+  if (momentRecentLoaded && !force) return;
+  const box = $("moment-recent-list");
+  const sum = $("moment-recent-summary");
+  if (box) box.innerHTML = '<div class="empty">读取中 …</div>';
+  if (sum) sum.textContent = "读取中 …";
+  try {
+    const data = await bridge.apiGet("moment-recent");
+    momentRecentLoaded = true;
+    renderMomentRecent(data);
+  } catch (e) {
+    if (sum) sum.textContent = "读取失败";
+    if (box) box.innerHTML = `<div class="empty">读取失败：${esc(e.message)}</div>`;
+  }
+}
+
 // ==================== 好感度 ====================
 
 let favourData = null;
@@ -1381,6 +1502,9 @@ function bind() {
   $("refresh")?.addEventListener("click", refresh);
   $("reschedule")?.addEventListener("click", reschedule);
   $("test-moment")?.addEventListener("click", testMoment);
+  $("moment-publish")?.addEventListener("click", publishMoment);
+  $("moment-content")?.addEventListener("input", updateMomentCount);
+  $("moment-recent-refresh")?.addEventListener("click", () => loadMomentRecent(true));
   $("sticker-reload")?.addEventListener("click", stickerReload);
   $("sticker-refresh")?.addEventListener("click", () => loadStickers(true));
   $("sticker-save")?.addEventListener("click", saveStickers);

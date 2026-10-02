@@ -53,7 +53,7 @@ class TokenHandlers:
         blank = self._tok_blank()
         try:
             if os.path.exists(self._tok_path()):
-                with open(self._tok_path(), encoding="utf-8") as f:
+                with open(self._tok_path(), encoding="utf-8-sig") as f:
                     data = json.load(f)
                 if isinstance(data, dict) and data.get("date") == blank["date"]:
                     for k, v in blank.items():

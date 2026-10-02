@@ -25,6 +25,8 @@ from ..core.stickers import SYSTEM_LABELS, read_base64, save_collected, thumb_b6
 
 # 插件根目录 = 本文件目录（web/）的上一级。
 # ⚠️ 本模块在子目录里，取插件内文件必须用这个基准，不能用 __file__ 的 dirname（会落到 web/）。
+# ⚠️ 读用户可能手改的 json 一律用 utf-8-sig：文件带 UTF-8 BOM 时 utf-8 会直接抛
+#    「Unexpected UTF-8 BOM」，配置项会全部渲染不出来（0.3.14 修）。
 PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -36,7 +38,7 @@ class SettingsHandlers:
 
         path = os.path.join(PLUGIN_ROOT, "_conf_schema.json")
         try:
-            with open(path, encoding="utf-8") as f:
+            with open(path, encoding="utf-8-sig") as f:
                 return json.load(f)
         except Exception as e:
             self.logger.warning(f"[图恒宇] 读取 _conf_schema.json 失败：{e}")

@@ -118,9 +118,11 @@ tuhengyu-plan/
 
 ## 许可
 
-本项目**原创部分**（面板、教程、插件）的许可方式**待定**。
-
-在确定之前，请勿将本项目用于商业用途。
+本项目**原创部分**（面板、教程）采用 **MIT** 许可，见 [`LICENSE`](LICENSE)。
+**AstrBot 插件**（`plugin/astrbot_plugin_tuhengyu/`）采用 **AGPL-3.0** —— 因其运行于
+AGPL-3.0 的 AstrBot 之上，见插件内 `LICENSE`。
+`vendor/` 目录内内置的第三方脚本**不在 MIT 范围内**，其来源与许可见
+[`vendor/NOTICE.md`](vendor/NOTICE.md)。
 
 ---
 

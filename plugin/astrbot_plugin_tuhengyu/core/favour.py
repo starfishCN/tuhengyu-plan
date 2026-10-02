@@ -337,7 +337,7 @@ class FavourStore:
     # ---------- 存取 ----------
     def _load(self) -> dict:
         try:
-            with open(self.path, encoding="utf-8") as f:
+            with open(self.path, encoding="utf-8-sig") as f:
                 raw = json.load(f)
             return raw if isinstance(raw, dict) else {}
         except FileNotFoundError:
@@ -595,7 +595,7 @@ class HistoryStore:
 
     def _load(self) -> dict:
         try:
-            with open(self.path, encoding="utf-8") as f:
+            with open(self.path, encoding="utf-8-sig") as f:
                 raw = json.load(f)
             return raw if isinstance(raw, dict) else {}
         except FileNotFoundError:
@@ -667,7 +667,7 @@ class CurveStore:
 
     def _load(self) -> dict:
         try:
-            with open(self.path, encoding="utf-8") as f:
+            with open(self.path, encoding="utf-8-sig") as f:
                 raw = json.load(f)
             return normalize_curve(raw)
         except FileNotFoundError:

@@ -68,6 +68,78 @@ class WebRoutes:
         data["result"] = result
         return json_response(data)
 
+    async def page_moment_publish(self):
+        """POST /astrbot_plugin_tuhengyu/moment-publish —— 直接发一条自定义内容（不经模型）。"""
+        if self._scheduler is None:
+            return error_response("调度器未运行（插件可能被禁用）", status_code=409)
+        try:
+            body = await web_request.json({})
+        except Exception as e:
+            return error_response(f"读取请求体失败：{e}", status_code=400)
+        content = str((body or {}).get("content", "")).strip()
+        if not content:
+            return error_response("内容为空。", status_code=400)
+        if len(content) > 1000:
+            return error_response("内容过长（上限 1000 字）。", status_code=400)
+        try:
+            ok = await self._scheduler._post_moment(content)
+        except Exception as e:
+            return error_response(f"发布出错：{e}", status_code=500)
+        if ok:
+            self._scheduler._last_moment = datetime.now()
+        data = self._scheduler.status_dict()
+        data["running"] = True
+        data["result"] = {
+            "ok": bool(ok),
+            "content": content,
+            "message": "已发布" if ok else "发布失败，看 AstrBot 日志里的 [图恒宇] 行。",
+        }
+        return json_response(data)
+
+    async def page_moment_recent(self):
+        """GET /astrbot_plugin_tuhengyu/moment-recent —— 回读最近几条说说（验证用）。"""
+        if self._scheduler is None:
+            return error_response("调度器未运行（插件可能被禁用）", status_code=409)
+        client = getattr(self._scheduler, "_qzone", None)
+        if client is None:
+            return json_response(
+                {"ok": False, "auth": False, "items": [], "message": "空间客户端未初始化。"}
+            )
+        try:
+            auth = await client.auth()
+        except Exception as e:
+            return json_response(
+                {"ok": False, "auth": False, "items": [], "message": f"鉴权失败：{e}"}
+            )
+        if auth is None:
+            return json_response(
+                {
+                    "ok": False,
+                    "auth": False,
+                    "items": [],
+                    "message": "拿不到空间 cookie（协议端未连接，或登录态失效）。",
+                }
+            )
+        try:
+            raw = await client.recent(3)
+        except Exception as e:
+            return json_response(
+                {"ok": False, "auth": True, "items": [], "message": f"读取失败：{e}"}
+            )
+        items = []
+        for it in raw or []:
+            try:
+                node = it or {}
+                content = str(node.get("content") or "").strip()
+                ts = node.get("created_time") or node.get("created") or 0
+                when = (
+                    datetime.fromtimestamp(int(ts)).strftime("%Y-%m-%d %H:%M") if ts else ""
+                )
+                items.append({"time": when, "content": content})
+            except Exception:
+                continue
+        return json_response({"ok": True, "auth": True, "uin": auth.uin, "items": items})
+
     async def page_sticker_reload(self):
         """POST /astrbot_plugin_tuhengyu/sticker-reload —— 重扫表情包目录。"""
         if self._scheduler is None:

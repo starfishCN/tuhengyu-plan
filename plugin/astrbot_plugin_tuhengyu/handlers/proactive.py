@@ -39,7 +39,7 @@ class ProactiveHandlers:
         try:
             if not os.path.exists(self._proactive_path()):
                 return
-            with open(self._proactive_path(), encoding="utf-8") as f:
+            with open(self._proactive_path(), encoding="utf-8-sig") as f:
                 data = json.load(f)
             if isinstance(data, dict):
                 for gid, d in data.items():

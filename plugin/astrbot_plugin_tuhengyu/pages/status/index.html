@@ -18,10 +18,10 @@
 
       <nav class="tabs" id="tabs">
         <button class="tab active" data-tab="status" type="button">状态</button>
-        <button class="tab" data-tab="actions" type="button">操作</button>
-        <button class="tab" data-tab="settings" type="button">设置</button>
+        <button class="tab" data-tab="space" type="button">空间</button>
         <button class="tab" data-tab="stickers" type="button">表情包</button>
         <button class="tab" data-tab="favour" type="button">好感度</button>
+        <button class="tab" data-tab="settings" type="button">设置</button>
       </nav>
 
       <p id="notice" class="notice" hidden></p>
@@ -85,12 +85,9 @@
             </tbody>
           </table>
         </section>
-      </section>
 
-      <!-- ========== 页签 2：操作 ========== -->
-      <section class="tab-pane" id="pane-actions">
         <section class="panel">
-          <h2>操作</h2>
+          <h2>作息维护</h2>
 
           <div class="action">
             <div class="action-main">
@@ -106,6 +103,13 @@
               </div>
             </div>
           </div>
+        </section>
+      </section>
+
+      <!-- ========== 页签 2：空间 ========== -->
+      <section class="tab-pane" id="pane-space">
+        <section class="panel">
+          <h2>空间</h2>
 
           <div class="action">
             <div class="action-main">
@@ -120,43 +124,42 @@
               </div>
             </div>
           </div>
+        </section>
 
-          <div class="action">
-            <div class="action-main">
-              <button id="sticker-reload" class="btn btn-ghost" type="button">重扫表情包</button>
-              <div class="action-text">
-                <div class="action-title">放完表情包后按这个</div>
-                <div class="action-desc">
-                  重新扫描表情包目录。把图放进插件数据目录的 <code>stickers/</code>（子目录名就是标签）后，
-                  按一下即可生效，不必重载插件。对话里收到别人发的图会<b>自动存进</b> <code>collected/</code>。
-                </div>
-                <div id="sticker-result" class="action-result" hidden></div>
-              </div>
+        <section class="panel">
+          <h2>手动发一条</h2>
+          <p class="set-tip">
+            直接把你写好的内容发到空间，<b>不经模型</b>、不耗 token。上限 1000 字。
+            会<b>真发出去</b>，想先验证登录态就点下面的「回读最近动态」。
+          </p>
+          <textarea id="moment-content" class="set-input moment-input" rows="3"
+            maxlength="1000" placeholder="要发的内容 …"></textarea>
+          <div class="set-actions">
+            <button id="moment-publish" class="btn" type="button">发布</button>
+            <span id="moment-count" class="card-hint">0 / 1000</span>
+          </div>
+          <div id="moment-result" class="action-result" hidden></div>
+        </section>
+
+        <section class="panel">
+          <h2>最近动态（回读）</h2>
+          <p class="set-tip">
+            从空间读回最近 3 条，用来确认刚发的有没有真上去、登录态有没有失效。
+            这一步只读不发。
+          </p>
+          <div class="sticker-bar">
+            <span id="moment-recent-summary" class="card-hint">—</span>
+            <div class="sticker-bar-actions">
+              <button id="moment-recent-refresh" class="btn btn-ghost" type="button">回读最近动态</button>
             </div>
           </div>
+          <div id="moment-recent-list" class="moment-list">
+            <div class="empty">点上面的按钮读取。</div>
+          </div>
         </section>
       </section>
 
-      <!-- ========== 页签 3：设置 ========== -->
-      <section class="tab-pane" id="pane-settings">
-        <section class="panel">
-          <h2>设置</h2>
-          <p class="set-tip">
-            这些就是插件配置。分组可折叠，改完点最下面的「保存设置」。
-            与 AstrBot 官方设置页写的是同一份配置。
-          </p>
-          <div id="settings" class="settings">
-            <div class="empty">读取中 …</div>
-          </div>
-          <div class="set-actions">
-            <button id="save-settings" class="btn" type="button">保存设置</button>
-            <button id="reload-settings" class="btn btn-ghost" type="button">放弃改动</button>
-          </div>
-          <div id="settings-result" class="action-result" hidden></div>
-        </section>
-      </section>
-
-      <!-- ========== 页签 4：表情包 ========== -->
+      <!-- ========== 页签 3：表情包 ========== -->
       <section class="tab-pane" id="pane-stickers">
         <section class="panel">
           <h2>表情包库</h2>
@@ -189,9 +192,26 @@
             <div class="empty">读取中 …</div>
           </div>
         </section>
+
+        <section class="panel">
+          <h2>表情包维护</h2>
+
+          <div class="action">
+            <div class="action-main">
+              <button id="sticker-reload" class="btn btn-ghost" type="button">重扫表情包</button>
+              <div class="action-text">
+                <div class="action-title">放完表情包后按这个</div>
+                <div class="action-desc">
+                  重新扫描表情包目录。把图放进插件数据目录的 <code>stickers/</code>（子目录名就是标签）后，
+                  按一下即可生效，不必重载插件。对话里收到别人发的图会<b>自动存进</b> <code>collected/</code>。
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </section>
 
-      <!-- ========== 页签 5：好感度 ========== -->
+      <!-- ========== 页签 4：好感度 ========== -->
       <section class="tab-pane" id="pane-favour">
         <section class="panel">
           <h2>好感度</h2>
@@ -239,6 +259,25 @@
           </div>
           <div id="favour-bands" class="favour-bands"></div>
           <div id="favour-deltas" class="favour-deltas"></div>
+        </section>
+      </section>
+
+      <!-- ========== 页签 5：设置（永远排最后） ========== -->
+      <section class="tab-pane" id="pane-settings">
+        <section class="panel">
+          <h2>设置</h2>
+          <p class="set-tip">
+            这些就是插件配置。分组可折叠，改完点最下面的「保存设置」。
+            与 AstrBot 官方设置页写的是同一份配置。
+          </p>
+          <div id="settings" class="settings">
+            <div class="empty">读取中 …</div>
+          </div>
+          <div class="set-actions">
+            <button id="save-settings" class="btn" type="button">保存设置</button>
+            <button id="reload-settings" class="btn btn-ghost" type="button">放弃改动</button>
+          </div>
+          <div id="settings-result" class="action-result" hidden></div>
         </section>
       </section>
     </main>

@@ -86,6 +86,18 @@ class TuhengyuPlugin(StickerHandlers, FavourHandlers, PokeHandlers, ProactiveHan
                 "插件页面：立即发一条空间动态",
             )
             context.register_web_api(
+                f"/{PLUGIN_NAME}/moment-publish",
+                self.page_moment_publish,
+                ["POST"],
+                "插件页面：手动发一条空间动态（自定义内容）",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/moment-recent",
+                self.page_moment_recent,
+                ["GET"],
+                "插件页面：回读最近空间动态",
+            )
+            context.register_web_api(
                 f"/{PLUGIN_NAME}/sticker-reload",
                 self.page_sticker_reload,
                 ["POST"],
