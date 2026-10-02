@@ -387,13 +387,14 @@ class TuhengyuPlugin(Star):
             scene=scene,
             state=st_state,
             group=group,
+            persona=persona,
         )
         provider = self._pick_provider(psec)
         if provider is None:
             self.logger.info("[图恒宇] 戳一戳：无可用模型，回落台词池。")
             return ""
         try:
-            resp = await provider.text_chat(prompt=prompt, system_prompt=persona)
+            resp = await provider.text_chat(prompt=prompt)
             text = (getattr(resp, "completion_text", "") or "").strip().strip('"').strip()
             return text[:60]
         except Exception as e:

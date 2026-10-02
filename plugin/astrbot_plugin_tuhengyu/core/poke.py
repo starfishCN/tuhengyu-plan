@@ -120,8 +120,13 @@ def build_poke_prompt(
     state: str = "",
     group: bool = False,
     name: str = "",
+    persona: str = "",
 ) -> str:
-    """给模型出题：一句话，贴人设。"""
+    """给模型出题：一句话，贴人设。
+
+    人设走 user 消息、不走 system。实测（LongCat-2.5-Preview）：同一个人设只放
+    system 时模型会无视它、回一句客服腔；拼进 user 消息后 18/18 稳定在角色内。
+    """
     limit = 20 if group else 30
     if kind == SNAP:
         mood = "你已经被同一个人连着戳烦了，直接怼一句，短、带情绪、不带脏字。"
@@ -133,10 +138,15 @@ def build_poke_prompt(
         mood = "普通关系，随口应一句就行。"
     who = f"（称呼：{name}）" if name else ""
     where = f"你此刻{scene}，心情{state}。" if scene else ""
-    return (
+    body = (
         f"事件：有人在 QQ 上戳了你一下{who}。\n"
         f"你和他的关系：{relationship}；你对他印象：{attitude}；好感度：{favour}。\n"
         f"{where}{mood}\n"
+        "用你自己的口吻、自己的自称和口头禅应一句，别用客服腔，别用通用客套话。\n"
         f"只输出这一句话本身：不超过 {limit} 个汉字，不加引号，不加动作描写，"
         "不加括号说明，不用说自己是 AI。"
     )
+    p = str(persona or "").strip()
+    if p:
+        return f"{p}\n\n——按上面这个角色——\n{body}"
+    return body
