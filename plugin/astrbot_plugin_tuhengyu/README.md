@@ -3,7 +3,7 @@
 给 bot「完整的一生」。让人设不只是「会说话」，而是**有自己的作息、会自己发空间、会发表情包、会怼人、偶尔在群里插一句**。
 
 - 包名：`astrbot_plugin_tuhengyu`
-- 版本：0.3.5
+- 版本：0.3.6
 - 支持平台：`aiocqhttp`（OneBot v11）
 - 许可：待定（见项目 README）
 
@@ -143,7 +143,7 @@ Plugin astrbot_plugin_tuhengyu (0.3.1) by starfishCN
 
 | 文件 | 类 | 内容 |
 |---|---|---|
-| `main.py` | `TuhengyuPlugin` | `__init__`（含 11 个 Web 路由注册）/ `initialize` / `terminate` / `_refresh_persona` / `_data_dir` / `_data_file` / `_sec` |
+| `main.py` | `TuhengyuPlugin` | `__init__`（含 11 个 Web 路由注册）/ `initialize` / `terminate` / `_bind_submodule_handlers`（归拢子模块 handler）/ `_refresh_persona` / `_data_dir` / `_data_file` / `_sec` |
 | `handlers/sticker.py` | `StickerHandlers` | 附图、单独发、收集 |
 | `handlers/favour.py` | `FavourHandlers` | 好感度注入与回收 |
 | `handlers/poke.py` | `PokeHandlers` | 戳一戳判定、文本、回戳 |
@@ -153,7 +153,7 @@ Plugin astrbot_plugin_tuhengyu (0.3.1) by starfishCN
 | `web/settings.py` | `SettingsHandlers` | 设置 schema / 取值 / 回落 / 合并 |
 | `diag/token.py` | `TokenHandlers` | token 估算、快照、输出 |
 
-拆法依据 AstrBot 的注册机制：`@filter.*` 装饰器在**模块导入时**注册，`handler_module_path` 取模块名，卸载按 `data.plugins.<插件目录>` 前缀清理 —— 所以把带装饰器的方法放子模块、由主类继承，注册与卸载行为都与单文件时一致。
+> **子模块 handler 的坑（0.3.6 修复）**：`@filter.*` 方法可以放子模块、由主类继承，但 AstrBot 有两处按 `handler.handler_module_path`（该函数定义所在的模块名）走精确匹配：① 用 `star_map[module_path]` 判定 handler 属于哪个插件，查不到就当「未激活插件」在唤醒阶段整体跳过；② 只在加载时对 `module_path == 插件主模块` 的 handler 做实例绑定。子模块里的方法两条都不满足 —— 命令、表情包、戳一戳、群聊观察、好感注入会**一起静默失效**（日志里看不出来，只是消息全被 LLM 接走）。`main.py` 的 `_bind_submodule_handlers()` 每轮加载把子模块 handler 的 `module_path` 归一到主模块并 `functools.partial` 绑到实例，绕开这个限制；新增带 `@filter.*` 的方法放在任一 mixin 里都会被自动收编，无需额外处理。
 
 > 自己加方法时注意相对导入：子目录文件用 `from ..core.x`，根目录文件（`main.py`、`commands.py`）用 `from .core.x`。
 

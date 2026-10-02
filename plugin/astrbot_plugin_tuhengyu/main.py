@@ -135,8 +135,57 @@ class TuhengyuPlugin(StickerHandlers, FavourHandlers, PokeHandlers, ProactiveHan
             self.logger.warning(f"[图恒宇] 注册页面 API 失败：{e}")
 
     # ---------- 生命周期 ----------
+    def _bind_submodule_handlers(self) -> None:
+        """把本包下子模块注册的 handler 归到主模块，并绑定到本插件实例。
+
+        AstrBot 有两处按 handler.handler_module_path（其值是该函数定义所在的模块）：
+          1) star_map 精确查找判定 handler 属于哪个插件 —— 查不到即当作「未激活插件」
+             在唤醒阶段整体跳过（core/star/star_handler.py 的 only_activated 检查）；
+          2) 加载时只对 module_path == 插件主模块的 handler 做实例绑定
+             （core/star/star_manager.py 的 rebind 段，functools.partial(raw, star_cls)）。
+        本插件的 handler 定义在 commands / handlers.* 等子模块里，module_path 与主模块
+        不同，于是既被判为未激活、又没被绑定实例，调用时报缺 self / 缺 event ——
+        命令、表情包、戳一戳、群聊观察、好感注入会一起失效。
+
+        这里做两件事：把子模块路径别名到主模块元数据（补查找），以及把这些 handler 的
+        module_path 归一到主模块并用 functools.partial 绑到本实例（补绑定）。每轮加载都
+        跑一遍，可重复执行。
+        """
+        try:
+            import functools
+            import sys as _sys
+
+            from astrbot.core.star.star import star_map as _star_map
+            from astrbot.core.star.star_handler import (
+                star_handlers_registry as _reg,
+            )
+        except Exception as e:  # API 变动时不致命
+            self.logger.warning(f"[图恒宇] 绑定子模块 handler 失败：{e}")
+            return
+        me = _star_map.get(__name__)
+        if me is None:
+            return
+        pkg = __package__ or __name__.rsplit(".", 1)[0]
+        # 1) 子模块路径 → 主模块元数据，供 star_map 查找
+        for mod_name in list(_sys.modules):
+            if mod_name.startswith(pkg + ".") and mod_name != __name__:
+                _star_map[mod_name] = me
+        # 2) 子模块 handler：归一到主模块并绑定本实例
+        for h in list(_reg):
+            mp = getattr(h, "handler_module_path", None)
+            if not mp or mp == __name__ or not mp.startswith(pkg + "."):
+                continue
+            raw = (
+                h.handler.func
+                if isinstance(h.handler, functools.partial)
+                else h.handler
+            )
+            h.handler = functools.partial(raw, self)
+            h.handler_module_path = __name__
+
     async def initialize(self):
         """插件加载后调用：启动生活调度器。"""
+        self._bind_submodule_handlers()  # 必须先做：否则本插件 handler 全被跳过
         if not self.config.get("enabled", True):
             self.logger.info("[图恒宇] 插件已禁用，不启动调度器。")
             return
