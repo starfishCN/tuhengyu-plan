@@ -1,44 +1,55 @@
 # 图恒宇计划 · 插件
 
-给 bot「完整的一生」。第一版：**作息 + 调度器 + 发 QQ 空间**。
+给 bot「完整的一生」。让人设不只是「会说话」，而是**有自己的作息、会自己发空间、会发表情包、会怼人、偶尔在群里插一句**。
 
 - 包名：`astrbot_plugin_tuhengyu`
-- 版本：0.2.7
+- 版本：0.2.28
 - 支持平台：`aiocqhttp`（OneBot v11）
 - 许可：待定（见项目 README）
 
 ## 它做什么
 
-调度器按「作息 + 检查间隔 + 概率」决定何时行动。作息**跟人设走**：
-首次启动读人设，让模型推一份一天的作息存盘，之后只读盘（不烧 token）。
-空人设或生成失败 → 保守默认（09:00–23:00 醒）。
+六项行为，一个插件，**全部由人设驱动** —— 换一份人设，作息和说话方式跟着变。
 
-每次行动时：
+| # | 行为 | 说明 | 零 token？ |
+|---|---|---|---|
+| 1 | **作息 + 虚拟行动** | 首次启动读人设，问模型推一份一天的作息存盘；之后按作息决定「此刻在干嘛」，并据此加权行动概率 | 生成时一次 |
+| 2 | **发 QQ 空间** | 按作息生成一条说说并发布（直连空间 Web 接口） | 否 |
+| 3 | **表情包** | 回复时按概率附一张图；可按 AI 的意图选图；也可单独发；自动收集别人发的图 | 选图零 token |
+| 4 | **好感度** | 自研三维状态（好感 / 印象 / 关系），注入对话并在回复末尾回收；语气随区间变化 | 否 |
+| 5 | **戳一戳** | 被戳时按人设 + 好感度反应：冷却内不理、连戳怼回、关系好回戳并说话 | 可关 |
+| 6 | **群聊主动插话** | 醒着时极低概率在群里接一句，接最近的群聊 | 否 |
 
-1. 看此刻在干嘛（作息给的 scene / state）
-2. 按状态给触发概率加权（在忙少动，闲着多动）
-3. 用 AstrBot 里配好的模型生成一条说说内容（**带上「此刻」**，所以发的不是凭空的话）
-4. 通过 OneBot 向协议端要 QQ 空间 cookie，算 g_tk，POST 到空间接口
+调度器按「作息 + 检查间隔 + 概率」决定何时行动，所有后台行为都依赖它 —— 否则会出现凌晨三点发自拍这种事。
 
-**不需要你额外配模型 key** —— 直接用 AstrBot 的。
+**不需要你额外配模型 key** —— 直接用 AstrBot 里配好的模型。
 
 ## 安装
+
+### 推荐：用面板一键部署
+
+本插件是「图恒宇计划」的一部分，配套部署面板会一并装好 AstrBot 与本插件。零基础用户走这条，不用敲命令。见项目根目录 README。
+
+### 手动安装（进阶 / 备用）
 
 AstrBot 插件市场在**无国际出口的机器上不可用**，所以手动装：
 
 ```bash
 # 1. 取代码（仓库根目录下有 plugin/ 文件夹）
 git clone https://gitee.com/starfishCN/tuhengyu-plan.git
-# 2. 放进插件目录（宿主机上就是 AstrBot 的 data/plugins/）
+# 2. 放进插件目录。Docker 部署的 AstrBot，数据目录通常就是 /AstrBot/data/
 cp -r tuhengyu-plan/plugin/astrbot_plugin_tuhengyu <AstrBot数据目录>/plugins/
 # 3. 重启 AstrBot
 docker restart astrbot
 ```
 
+> 找不到数据目录时：它就是你给 AstrBot 挂载的那个卷。官方镜像默认在容器内 `/AstrBot/data/`，
+> 宿主机上一般是 `./data` 或某个具名卷。`plugins/` 就在它下面。
+
 启动成功的话，日志里会出现：
 
 ```
-Plugin astrbot_plugin_tuhengyu (0.2.7) by starfishCN
+Plugin astrbot_plugin_tuhengyu (0.2.28) by starfishCN
 [图恒宇] 生活调度器已启动。
 ```
 
@@ -47,60 +58,70 @@ Plugin astrbot_plugin_tuhengyu (0.2.7) by starfishCN
 | 命令 | 作用 |
 |---|---|
 | `/图恒宇` | 看调度器状态（作息、间隔、概率、上次发空间时间） |
-| `/图恒宇测试` | **立刻**生成并发布一条，用于验证链路 |
+| `/图恒宇测试` | **立刻**生成并发布一条空间动态，用于验证链路 |
+| `/图恒宇插话 群号` | 手动让它在指定群插一句（调试用，不需要开主动插话开关） |
+| `/图恒宇好感` | 看当前会话的好感度三维状态 |
+| `/token诊断` | 输出本次会话的 system prompt / 上下文 / 工具字符量与折算 token |
 
 ## 插件页面（WebUI 内）
 
-在 WebUI 的插件详情页里有一页「运行状态」（`pages/status/`），不用敲命令就能看：
+在 WebUI 的插件详情页里有一页「运行状态」（`pages/status/`），四个页签，不用敲命令：
 
-- 此刻状态（scene · state）、醒着/睡着、作息来源与段数、**当前人设（来自哪个人格）**
-- 触发概率：基准 × 状态倍数 → 生效值
-- 检查间隔、发空间开关与最短间隔、上次发空间时间
-- 作息时段表（当前命中的那一行高亮）
-- **操作面板**：
-  - **重算作息** —— *换人设后按这个*。丢弃盘上作息，重新读**当前人设**让模型生成一份。
-    ⚠️ 作息只在生成时读人设，改完人设不按它不会生效（重启插件也行，但会重来一遍）。
-    页面会自动比对：人设与盘上作息对不上时，顶部会提示「建议重算」。
-  - **测试发一条** —— 等同 QQ 里的 `/图恒宇测试`，立即生成并发布一条空间动态。
-    **会产生真实动态**，点击前有确认框。
+- **状态**：此刻状态、醒着/睡着、作息来源与段数、当前人设、触发概率（基准 × 状态倍数）、检查间隔、发空间开关、上次发空间时间、作息时段表（当前命中的一行高亮）
+- **操作**：重算作息 / 测试发一条空间动态（二次确认）/ 重扫表情包目录
+- **设置**：直接读写插件配置（与 AstrBot 官方设置页是同一份），下拉可选人格与模型
+- **表情包**：按分类浏览、新建分类、上传图片、一键「自动归类」（调多模态模型把散图归入意图类目）
 
-页面的后端 API 由插件自己注册（路由带插件名前缀）：
+页面后端 API 由插件自己注册（路由带插件名前缀）：
 
 | 方法 | 路由 | 作用 |
 |---|---|---|
-| GET | `/astrbot_plugin_tuhengyu/status` | 结构化运行状态（含 `persona_set` / `persona_label` / `persona_pending` / `schedule_auto`） |
+| GET | `/astrbot_plugin_tuhengyu/status` | 结构化运行状态 |
 | POST | `/astrbot_plugin_tuhengyu/reschedule` | 丢弃旧作息并按人设重新生成 |
-| POST | `/astrbot_plugin_tuhengyu/test-moment` | 立即生成并发布一条（返回 `result`） |
+| POST | `/astrbot_plugin_tuhengyu/test-moment` | 立即生成并发布一条空间动态 |
+| POST | `/astrbot_plugin_tuhengyu/sticker-reload` | 重扫表情包目录 |
+| GET | `/astrbot_plugin_tuhengyu/stickers` | 表情包库（含缩略图） |
+| POST | `/astrbot_plugin_tuhengyu/sticker-category` | 新建分类 |
+| POST | `/astrbot_plugin_tuhengyu/sticker-upload` | 上传图片（base64） |
+| POST | `/astrbot_plugin_tuhengyu/sticker-classify` | 识图归类（按批） |
+| GET | `/astrbot_plugin_tuhengyu/settings` | 配置 schema + 当前值 + 下拉选项 |
+| POST | `/astrbot_plugin_tuhengyu/settings` | 保存配置 |
 
-页面里的相对 endpoint（`status` / `reschedule`）会被 bridge 拼成
-`/api/v1/plugins/extensions/astrbot_plugin_tuhengyu/<endpoint>`。
-改页面静态文件刷新页面即可；**新增或删除页面目录**要重载插件。
+改页面静态文件刷新页面即可；新增或删除页面目录要重载插件。
 
 ## 配置
 
-在 AstrBot WebUI 的插件配置页改。配置按分组折叠：
+在 AstrBot WebUI 的插件配置页改（或用本插件的「设置」页签）。配置按分组折叠：
 
 | 分组 | 键 | 说明 | 默认 |
 |---|---|---|---|
 | — | `enabled` | 总开关 | `true` |
-| — | `persona_id` | **人格** —— 下拉选 AstrBot 已配置的人格。**留空 = 跟随 AstrBot 当前默认人格**（换了人格自动跟上） | 空 |
+| — | `persona_id` | **人格** —— 下拉选 AstrBot 已配置的人格。**留空 = 跟随 AstrBot 当前默认人格** | 空 |
 | — | `persona_prompt` | 人设补充（可选），追加在所选人格后面 | 空 |
 | `chat_private` | `enabled` / `prompt` / `model` | 私聊场景说明与模型 | 开 |
 | `chat_group` | `enabled` / `prompt` / `model` | 群聊场景说明与模型 | 开 |
 | `schedule` | `auto_generate` | 按人设自动生成作息 | `true` |
-| `schedule` | `manual_hours` | 手动作息，如 `09:00-23:00`（关自动生成时生效） | `09:00-23:00` |
-| `schedule` | `generate_model` | 生成作息用的模型，留空用 AstrBot 当前默认 | 空 |
-| `scheduler` | `check_interval_minutes` | 调度器多久检查一次 | `30` |
+| `schedule` | `manual_hours` | 手动作息，如 `09:00-23:00` | `09:00-23:00` |
+| `schedule` | `generate_model` | 生成作息用的模型，留空用默认 | 空 |
+| `scheduler` | `check_interval_minutes` | 调度器多久检查一次（分钟） | `30` |
 | `scheduler` | `act_probability` | 每次检查触发行动的**基础**概率 | `0.15` |
-| `scheduler` | `state_bias` | 按此刻状态加权（倍数与词表见下面四项） | `true` |
-| `scheduler` | `bias_busy_factor` | 「在忙」时的概率倍数，小于 1 即压低 | `0.35` |
-| `scheduler` | `bias_idle_factor` | 「闲着」时的概率倍数，大于 1 即提高 | `1.6` |
-| `scheduler` | `bias_busy_keywords` | 判定「在忙」的关键词，逗号分隔，留空用内置 | 空 |
-| `scheduler` | `bias_idle_keywords` | 判定「闲着」的关键词，逗号分隔，留空用内置 | 空 |
+| `scheduler` | `state_bias` | 按此刻状态加权 | `true` |
+| `scheduler` | `bias_busy_factor` / `bias_idle_factor` | 「在忙」/「闲着」的概率倍数 | `0.35` / `1.6` |
+| `scheduler` | `bias_busy_keywords` / `bias_idle_keywords` | 状态判定关键词，留空用内置 | 空 |
 | `moment` | `enabled` | 是否允许发空间 | `true` |
 | `moment` | `min_interval_hours` | 两次发空间的最小间隔（小时） | `6` |
-| `moment` | `prompt` | 发说说时给模型的指令 | 空 |
-| `moment` | `provider_id` | 生成说说内容的模型，留空用 AstrBot 当前默认 | 空 |
+| `moment` | `prompt` / `provider_id` | 说说指令与生成模型 | 空 |
+| `sticker` | `enabled` | 回复是否附带表情包 | `true` |
+| `sticker` | `probability` | 每条回复附图的概率 | `0.35` |
+| `sticker` | `intent_match` | 按 AI 的意图挑图 | `true` |
+| `sticker` | `send_separate` | 附图单独发一条 | `false` |
+| `sticker` | `collect_enabled` | 自动收集对话里的图片 | `true` |
+| `sticker` | `collect_label` | 收集来的图放进哪个目录 | `collected` |
+| `sticker` | `classify_model` | 识图归类用的模型（需支持多模态），留空用默认 | 空 |
+| `favour` | `enabled` / `inject` / `session_based` | 好感度开关、注入开关、是否按会话独立 | `true`/`true`/`false` |
+| `poke` | `enabled` / `use_model` / `cooldown_seconds` / `repeat_window_seconds` / `snap_threshold` / `poke_back_prob` / `speak_prob` / `model` | 戳一戳各项 | 见设置页 |
+| `proactive` | `enabled` | 主动插话总开关（**默认关**） | `false` |
+| `proactive` | `probability` / `hot_window_minutes` / `min_recent_messages` / `cooldown_minutes` / `daily_cap_per_group` / `max_chars` / `groups` / `model` | 插话各项 | 见设置页 |
 
 > ⚠️ 这些是**嵌套键**（`schedule.manual_hours` 这种），不是扁平 key。
 > 0.2.0 之前的旧配置名（`active_hours` / `moment_enabled` 等）已废弃，需重填一次。
@@ -109,16 +130,11 @@ Plugin astrbot_plugin_tuhengyu (0.2.7) by starfishCN
 
 **不用在插件里抄一份。** 插件直接读 AstrBot 的「人格」：
 
-1. 在 AstrBot WebUI 里把人格配好（人格页 / 默认人格）；
+1. 在 AstrBot WebUI 里把人格配好；
 2. 插件配置里的 `persona_id` **留空**，即跟随 AstrBot 当前默认人格；
 3. 想给这个插件单独指定另一个，就在 `persona_id` 的下拉里挑一个。
 
-少数情况下需要在人格之外再加一段说明（比如插件专有的补充），才填 `persona_prompt`。
-
-都没配的话，插件用内置的通用口吻（一个普通人随手记心情）。
-
-> 0.2.5 起：`persona_prompt` 不再是唯一来源。此前在插件里手抄人设的写法仍能跑，
-> 但它现在只是「补充」，主来源是 AstrBot 的人格。
+少数情况下需要在人格之外再加一段说明，才填 `persona_prompt`。都没配的话，插件用内置的通用口吻。
 
 ## 原理备注（给好奇的人）
 
@@ -132,18 +148,16 @@ QQ 客户端登录态就在协议端里，`get_cookies` 动作能把它吐出来
 **g_tk 是什么？**
 空间接口的 CSRF 防护，由 cookie 里的 `p_skey` 经 bkn 算法算出（不是 `get_csrf_token`）。
 
+**人设怎么进模型？**
+长人设拼进 user 消息（不是 system），并且会用一句硬要求点名人设，避免被具体任务盖过 —— 详见 `core/proactive.py` 与 `core/persona.py` 的注释。
+
 ## 风险
 
 - 空间接口是**逆向**的，官方随时可能改，改了就会失效。
-- **主动行为是非官方 bot 的高危区**。默认参数已经比较克制（6 小时间隔 + 15% 概率），别调得太激进。
-
-## 未实现（后续）
-
-- 发表情包
-- 主动发言（私聊/群聊的第一句话）
-- 怼人时机
-- 作息改动后自动重算已有内存副本（现在人设变了要重启插件才重读）
+- **主动行为（发空间 / 主动插话 / 回戳）是非官方 bot 的高危区**。默认参数已比较克制（发空间 6 小时间隔 + 15% 概率；插话默认关闭），别调得太激进。
+- 不要把 noVNC / WebUI / OneBot 端口裸暴露在公网（官方警告）。
 
 ## 已知问题
 
 - 调度器的「上次发空间时间」存在内存里，**重启 AstrBot 会丢**，可能刚重启就补发一条。后续要落盘。
+- 群聊记录只存内存，重启即清空（`proactive.json` 只存冷却与计数）。

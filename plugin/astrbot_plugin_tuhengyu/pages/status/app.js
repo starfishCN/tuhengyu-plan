@@ -398,11 +398,12 @@ async function autoClassify() {
       left = c.remaining || 0;
       if (!left || !c.batch || !c.moved) break;
     }
-    setStickerResult(
-      "归类完成：归入意图 " + moved + "，留在「其他」" + kept + "，失败 " + failed +
-        (left ? "；还剩 " + left + " 张判不出类目，可再点一次。" : "。"),
-      false
-    );
+    let msg =
+        "归类完成：归入意图 " + moved + "，留在「其他」" + kept + "，失败 " + failed;
+      if (failed)
+        msg += "（失败通常是识图模型调用失败，检查「设置」里的识图模型是否支持图片）";
+      msg += left ? "；还剩 " + left + " 张判不出类目，可再点一次。" : "。";
+      setStickerResult(msg, false);
     stickersLoaded = false;
     await loadStickers(true);
   } catch (e) {
@@ -592,7 +593,7 @@ function collectValues() {
     if (!key) continue;
     let v;
     if (ctrl.type === "checkbox") v = ctrl.checked;
-    else if (ctrl.type === "number") v = ctrl.value === "" ? 0 : Number(ctrl.value);
+    else if (ctrl.type === "number") v = ctrl.value === "" ? "" : Number(ctrl.value);
     else v = ctrl.value;
     const sub = ctrl.dataset.sub;
     if (sub) {
@@ -635,8 +636,16 @@ function saveSettings() {
       const payload = collectValues();
       const data = await bridge.apiPost("settings", payload);
       if (data && data.status) render(data.status);
-      setSettingsResult("已保存。", false);
-      showNotice("");
+      if (data && data.saved === false) {
+        setSettingsResult(
+          "已改到内存，但未能落盘：请在 AstrBot 官方插件配置页点一次「保存」，否则重启后会丢。",
+          true,
+        );
+        showNotice("");
+      } else {
+        setSettingsResult("已保存。", false);
+        showNotice("");
+      }
       await loadSettings();
     } catch (e) {
       setSettingsResult(`保存失败：${e.message}`, true);

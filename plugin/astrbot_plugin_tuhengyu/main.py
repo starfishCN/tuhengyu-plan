@@ -12,6 +12,8 @@
     - 平台访问：context.get_platform("aiocqhttp") → platform.get_client() → bot.call_action()
 """
 import asyncio
+import json
+import os
 import random
 from datetime import datetime
 
@@ -145,8 +147,6 @@ class TuhengyuPlugin(Star):
 
     def _data_dir(self) -> str:
         """插件数据目录：data/plugin_data/astrbot_plugin_tuhengyu。"""
-        import os
-
         try:
             from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
 
@@ -155,12 +155,47 @@ class TuhengyuPlugin(Star):
             self.logger.warning(f"[图恒宇] 取数据目录失败，退回插件目录：{e}")
             return os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
+    def _data_file(self, name: str) -> str:
+        """数据目录下的一个文件路径。"""
+        return os.path.join(self._data_dir(), name)
+
+    def _sec(self, name: str) -> dict:
+        """取某个配置分组，保证返回 dict（缺失 / 类型不对时给空 dict）。"""
+        sec = self.config.get(name) if isinstance(self.config, dict) else None
+        return sec if isinstance(sec, dict) else {}
+
     async def terminate(self):
         """插件卸载时调用：停调度器。"""
         if self._task is not None:
             self._task.cancel()
             self._task = None
         self.logger.info("[图恒宇] 生活调度器已停止。")
+
+    # ---------- 表情包：选图（两条发送路径共用） ----------
+    def _sticker_reply_b64(self, event: AstrMessageEvent) -> str | None:
+        """按配置决定本条回复要不要附表情包；要则返回 base64，否则 None。
+
+        两条发送路径（attach_sticker / send_sticker_separately）共用同一份
+        概率与选图逻辑，口径完全一致，也不会各掷一次骰子。
+        """
+        sec = self._sec("sticker")
+        if not sec.get("enabled", True):
+            return None
+        try:
+            prob = float(sec.get("probability", 0.35))
+        except (TypeError, ValueError):
+            prob = 0.35
+        if prob <= 0 or random.random() > prob:
+            return None
+        try:
+            reply_text = event.get_result().get_plain_text()
+        except Exception:
+            reply_text = ""
+        st = self._scheduler.schedule.state_at()
+        path = self._scheduler.pick_sticker(f"{reply_text}{st.scene}{st.state}")
+        if path is None:
+            return None
+        return read_base64(path)
 
     # ---------- 回复附带表情包 ----------
     @filter.on_decorating_result()
@@ -172,30 +207,15 @@ class TuhengyuPlugin(Star):
         """
         if self._scheduler is None:
             return
-        sec = self.config.get("sticker") if isinstance(self.config, dict) else None
-        sec = sec if isinstance(sec, dict) else {}
+        sec = self._sec("sticker")
         if not sec.get("enabled", True):
             return
         if sec.get("send_separate", False):
             return  # 单独发模式：这里不附，交给 after_message_sent 另发一条
-        try:
-            prob = float(sec.get("probability", 0.35))
-        except (TypeError, ValueError):
-            prob = 0.35
-        if prob <= 0 or random.random() > prob:
-            return
         result = event.get_result()
         if result is None or not getattr(result, "chain", None):
             return
-        try:
-            reply_text = result.get_plain_text()
-        except Exception:
-            reply_text = ""
-        st = self._scheduler.schedule.state_at()
-        path = self._scheduler.pick_sticker(f"{reply_text}{st.scene}{st.state}")
-        if path is None:
-            return
-        b64 = read_base64(path)
+        b64 = self._sticker_reply_b64(event)
         if not b64:
             return
         from astrbot.api.message_components import Image
@@ -208,31 +228,16 @@ class TuhengyuPlugin(Star):
         """单独发模式：bot 回复发出后，按概率再发一条只含表情包的消息。
 
         与 attach_sticker 互斥（靠 sticker.send_separate 分流）：关时这里是空的。
-        选图与概率同 attach_sticker，保持两条路径口径一致。
+        选图与概率同 attach_sticker，共用 _sticker_reply_b64，口径一致。
         """
         if self._scheduler is None:
             return
-        sec = self.config.get("sticker") if isinstance(self.config, dict) else None
-        sec = sec if isinstance(sec, dict) else {}
+        sec = self._sec("sticker")
         if not sec.get("enabled", True):
             return
         if not sec.get("send_separate", False):
             return
-        try:
-            prob = float(sec.get("probability", 0.35))
-        except (TypeError, ValueError):
-            prob = 0.35
-        if prob <= 0 or random.random() > prob:
-            return
-        try:
-            reply_text = event.get_result().get_plain_text()
-        except Exception:
-            reply_text = ""
-        st = self._scheduler.schedule.state_at()
-        path = self._scheduler.pick_sticker(f"{reply_text}{st.scene}{st.state}")
-        if path is None:
-            return
-        b64 = read_base64(path)
+        b64 = self._sticker_reply_b64(event)
         if not b64:
             return
         from astrbot.api.event import MessageChain
@@ -249,13 +254,18 @@ class TuhengyuPlugin(Star):
         """把对话里收到的图片存进表情包库（bot 自己攒表情包）。
 
         只存图，不改消息、不回复。同内容按 md5 去重。
+        忽略 sender 是 bot 自己的事件（协议端存在把出站动作回传成入站事件的回环）。
         """
         if self._scheduler is None:
             return
-        sec = self.config.get("sticker") if isinstance(self.config, dict) else None
-        sec = sec if isinstance(sec, dict) else {}
+        sec = self._sec("sticker")
         if not sec.get("collect_enabled", True):
             return
+        try:
+            if str(event.get_self_id() or "") == str(event.get_sender_id() or ""):
+                return
+        except Exception:
+            pass
         try:
             msgs = event.get_messages()
         except Exception:
@@ -263,8 +273,6 @@ class TuhengyuPlugin(Star):
         imgs = [m for m in msgs if isinstance(m, Image)]
         if not imgs:
             return
-
-        import os
 
         label = str(sec.get("collect_label", "collected") or "collected").strip() or "collected"
         root = os.path.join(self._data_dir(), "stickers")
@@ -283,8 +291,7 @@ class TuhengyuPlugin(Star):
 
     # ---------- 好感度：注入 + 回收 ----------
     def _favour_cfg(self) -> dict:
-        sec = self.config.get("favour") if isinstance(self.config, dict) else None
-        return sec if isinstance(sec, dict) else {}
+        return self._sec("favour")
 
     def _favour(self) -> FavourStore:
         if self._favour_store is None:
@@ -338,8 +345,7 @@ class TuhengyuPlugin(Star):
 
     # ---------- 戳一戳 ----------
     def _poke_cfg(self) -> dict:
-        sec = self.config.get("poke") if isinstance(self.config, dict) else None
-        return sec if isinstance(sec, dict) else {}
+        return self._sec("poke")
 
     def _bridge(self):
         """取 OneBot 桥（懒加载并缓存）。"""
@@ -540,18 +546,13 @@ class TuhengyuPlugin(Star):
 
     # ---------- 群聊主动插话 ----------
     def _proactive_cfg(self) -> dict:
-        sec = self.config.get("proactive") if isinstance(self.config, dict) else None
-        return sec if isinstance(sec, dict) else {}
+        return self._sec("proactive")
 
     def _proactive_path(self) -> str:
-        import os
-
-        return os.path.join(self._data_dir(), "proactive.json")
+        return self._data_file("proactive.json")
 
     def _proactive_load(self) -> None:
         """读回每群的冷却 / 今日计数（群聊内容本身不落盘）。"""
-        import json
-        import os
 
         self._groups = {}
         try:
@@ -572,7 +573,6 @@ class TuhengyuPlugin(Star):
             self.logger.debug(f"[图恒宇] 读主动发言状态失败：{e}")
 
     def _proactive_save(self) -> None:
-        import json
 
         try:
             data = {
@@ -801,9 +801,7 @@ class TuhengyuPlugin(Star):
             return 0
 
     def _tok_path(self) -> str:
-        import os
-
-        return os.path.join(self._data_dir(), "token_stats.json")
+        return self._data_file("token_stats.json")
 
     def _tok_blank(self) -> dict:
         return {
@@ -816,8 +814,6 @@ class TuhengyuPlugin(Star):
         }
 
     def _tok_load(self) -> dict:
-        import json
-        import os
 
         blank = self._tok_blank()
         try:
@@ -837,7 +833,6 @@ class TuhengyuPlugin(Star):
             self._tok_stats = self._tok_blank()
 
     def _tok_save(self) -> None:
-        import json
 
         try:
             with open(self._tok_path(), "w", encoding="utf-8") as f:
@@ -1182,13 +1177,14 @@ class TuhengyuPlugin(Star):
         lib = self._scheduler.stickers
         exclude = set(intent_labels()) | set(SYSTEM_LABELS)
         extra = [c for c in lib.categories() if c not in exclude]
-        try:
-            provider = self.context.get_using_provider()
-        except Exception as e:
-            self.logger.warning(f"[图恒宇] 取模型失败：{e}")
-            provider = None
+        # 识图归类优先用 sticker.classify_model，没配就回落 AstrBot 默认模型
+        sec = self._sec("sticker")
+        provider = self._pick_provider({"model": sec.get("classify_model", "")})
         if provider is None:
-            return error_response("未配置对话模型，无法识图归类", status_code=400)
+            return error_response(
+                "未配置可用的识图模型，无法归类（请检查 sticker.classify_model）",
+                status_code=400,
+            )
         try:
             body = await web_request.json({})
         except Exception:
@@ -1204,7 +1200,12 @@ class TuhengyuPlugin(Star):
         moved, kept, failed = 0, 0, 0
         for _tag, path in batch:
             cat = await classify_image(provider, path, extra=extra)
+            if cat is None:
+                # 模型调用失败（不是「判不出」），单独计数
+                failed += 1
+                continue
             if cat == INTENT_FALLBACK:
+                # 模型判不出类目，留在原地
                 kept += 1
                 continue
             ok, _msg = lib.move_image(path, cat)
@@ -1232,8 +1233,6 @@ class TuhengyuPlugin(Star):
     # ---------- 插件页面：设置读写 ----------
     def _load_schema(self) -> dict:
         """读插件同级的 _conf_schema.json（设置页据此渲染控件）。"""
-        import json
-        import os
 
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_conf_schema.json")
         try:
@@ -1245,7 +1244,6 @@ class TuhengyuPlugin(Star):
 
     def _config_values(self) -> dict:
         """当前配置的纯数据副本（保证可 JSON 序列化）。"""
-        import json
 
         try:
             return json.loads(json.dumps(dict(self.config), ensure_ascii=False, default=str))
@@ -1254,27 +1252,47 @@ class TuhengyuPlugin(Star):
 
     @staticmethod
     def _coerce(value, sch):
-        """按 schema 的 type 归一化单值。"""
-        typ = (sch or {}).get("type")
+        """按 schema 的 type 归一化单值。
+
+        空值（None / 空白串）不写 0，而是回落 schema 默认值 —— 用户在设置页
+        把一个数值输入框清空，应当恢复默认，而不是被静默改成 0。
+        """
+        sch = sch or {}
+        typ = sch.get("type")
+        default = sch.get("default")
+        blank = value is None or (isinstance(value, str) and not value.strip())
+
+        def _fallback_num(zero):
+            if isinstance(default, (int, float)) and not isinstance(default, bool):
+                return type(zero)(default)
+            return zero
+
         if typ == "bool":
             if isinstance(value, bool):
                 return value
+            if blank:
+                return bool(default) if default is not None else False
             return str(value).strip().lower() in ("1", "true", "yes", "on", "是", "开")
         if typ == "int":
+            if blank:
+                return _fallback_num(0)
             try:
                 return int(value)
             except (TypeError, ValueError):
-                return 0
+                return _fallback_num(0)
         if typ == "float":
+            if blank:
+                return _fallback_num(0.0)
             try:
                 return float(value)
             except (TypeError, ValueError):
-                return 0.0
-        return "" if value is None else str(value)
+                return _fallback_num(0.0)
+        if blank:
+            return default if default is not None else ""
+        return str(value)
 
     def _merge_settings(self, payload: dict) -> dict:
         """只接受 schema 里声明过的键，其余忽略（防写坏配置）。"""
-        import json
 
         schema = self._load_schema()
         out = json.loads(json.dumps(dict(self.config), ensure_ascii=False, default=str))
@@ -1353,15 +1371,27 @@ class TuhengyuPlugin(Star):
             merged = self._merge_settings(payload)
         except Exception as e:
             return error_response(f"设置格式错误：{e}", status_code=400)
-        try:
-            self.config.update(merged)
-            save = getattr(self.config, "save_config", None)
-            if callable(save):
+        self.config.update(merged)
+        save = getattr(self.config, "save_config", None)
+        if callable(save):
+            try:
                 save()
-        except Exception as e:
-            return error_response(f"保存失败：{e}", status_code=500)
+            except Exception as e:
+                return error_response(f"保存失败：{e}", status_code=500)
         await self._refresh_persona()  # 人设/模型可能改了
         data = self._scheduler.status_dict() if self._scheduler is not None else {}
         data["running"] = self._scheduler is not None
-        return json_response({"ok": True, "values": self._config_values(), "status": data})
+        if not callable(save):
+            data["message"] = (
+                "配置已改到内存，但当前 AstrBot 不支持自动落盘（缺 save_config）。"
+                "请在 AstrBot 官方插件配置页点一次「保存」，否则重启后会丢。"
+            )
+        return json_response(
+            {
+                "ok": True,
+                "saved": callable(save),
+                "values": self._config_values(),
+                "status": data,
+            }
+        )
         return json_response(data)

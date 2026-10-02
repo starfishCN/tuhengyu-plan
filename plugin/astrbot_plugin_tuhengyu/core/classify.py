@@ -4,6 +4,8 @@
 选图（bot 回复附图）不走这里，见 core/stickers.py。
 
 模型只许从给定类目清单里挑一个；返回文本按清单匹配，匹配不上归「其他」。
+「判不出类目」与「调用失败」是两件事：前者返回「其他」（= FALLBACK），
+后者返回 None，由调用方单独计入失败，避免把模型报错伪装成「判不出」。
 """
 from __future__ import annotations
 
@@ -48,10 +50,14 @@ def parse_reply(text: str, extra=None) -> str:
     return FALLBACK
 
 
-async def classify_image(provider, path, extra=None) -> str:
-    """调一次多模态模型给图片定类目；失败返回「其他」。"""
+async def classify_image(provider, path, extra=None) -> str | None:
+    """调一次多模态模型给图片定类目。
+
+    返回类目名（含「其他」= 模型判不出）；
+    返回 None = 调用失败（无可用模型 / 请求异常），调用方应单独计为失败。
+    """
     if provider is None:
-        return FALLBACK
+        return None
     try:
         resp = await provider.text_chat(
             prompt=build_prompt(extra),
@@ -61,4 +67,4 @@ async def classify_image(provider, path, extra=None) -> str:
         return parse_reply(text, extra)
     except Exception as e:
         logger.warning(f"[图恒宇] 识图归类失败（{path}）：{e}")
-        return FALLBACK
+        return None
