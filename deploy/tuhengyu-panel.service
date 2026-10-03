@@ -6,7 +6,9 @@ After=network.target
 Type=simple
 WorkingDirectory=/opt/tuhengyu-panel
 Environment=PANEL_USER=admin
-Environment=PANEL_PASS=Tuhengyu2026
+# 安装脚本会把这一行替换成随机生成的初始密码（不写死在仓库里）。
+# 首次登录后会强制改密，改完存在面板目录的 .panel_auth.json，这里就不再被使用。
+Environment=PANEL_PASS=__PANEL_PASS__
 ExecStart=/opt/tuhengyu-panel/.venv/bin/python main.py
 Restart=always
 RestartSec=3

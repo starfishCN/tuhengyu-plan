@@ -731,12 +731,84 @@ _announce_password()
 #                             拦不住它等于没拦。
 #   · 其余一切                必须带 Cookie，否则跳登录页
 
+# ------------------------------------------------------ 首次强制改密（2026-10-03）
+#
+# 起因：安装脚本原先把默认密码**写死在仓库里**（`admin` + 固定值），
+# 而面板能执行任意系统命令 —— 公网上一扫就能进。仓库里出现明文口令
+# 也直接踩了「公开产物不留凭据」的线。
+#
+# 现在改为三段式：
+#   1. 安装时**随机生成**初始密码，只在安装终端打印一次，不进仓库；
+#   2. 首次登录**强制改密**，没改完不放行任何页面；
+#   3. 新密码以「随机盐 + SHA-256」存 `.panel_auth.json`（0600）。
+#
+# 为什么不再依赖环境变量：`systemctl show`、`/proc/<pid>/environ`
+# 都能把 Environment= 里的明文读出来。
+
+_AUTH_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".panel_auth.json")
+
+
+def _load_auth():
+    try:
+        with open(_AUTH_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if isinstance(data, dict) and data.get("user") and data.get("salt") and data.get("hash"):
+        return data
+    return None
+
+
+def _hash_pwd(salt: str, pwd: str) -> str:
+    return hashlib.sha256(f"{salt}|{pwd}".encode()).hexdigest()
+
+
+def _save_auth(user: str, pwd: str) -> bool:
+    salt = secrets.token_hex(16)
+    payload = {"user": user, "salt": salt, "hash": _hash_pwd(salt, pwd)}
+    tmp = _AUTH_FILE + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, _AUTH_FILE)
+        return True
+    except OSError as exc:
+        print(f"[图恒宇] 警告：改密失败，无法写入 {_AUTH_FILE}（{exc}）")
+        return False
+
+
+def _check_login(user: str, pwd: str) -> bool:
+    saved = _load_auth()
+    if saved:
+        ok_u = hmac.compare_digest(user, saved["user"])
+        ok_p = hmac.compare_digest(_hash_pwd(saved["salt"], pwd), saved["hash"])
+    else:
+        ok_u = hmac.compare_digest(user, PANEL_USER)
+        ok_p = hmac.compare_digest(pwd, PANEL_PASS)
+    return ok_u & ok_p
+
+
+def _must_change() -> bool:
+    """还没设过自己的密码 → 必须先改密才放行。"""
+    return _load_auth() is None
+
+
 COOKIE_NAME = "tg_session"
-_SESSION_TOKEN = hmac.new(
-    hashlib.sha256(f"tuhengyu|{PANEL_PASS}".encode()).digest(),
-    b"panel-session",
-    hashlib.sha256,
-).hexdigest()
+
+# 最少密码长度。面板能装 Docker、改 daemon.json，别用 6 位糊弄。
+MIN_PWD_LEN = 8
+
+
+def _session_token() -> str:
+    """会话密钥随密码变化 —— 改完密码，所有旧会话立即失效。"""
+    saved = _load_auth()
+    secret = saved["hash"] if saved else f"tuhengyu|{PANEL_PASS}"
+    return hmac.new(
+        hashlib.sha256(secret.encode()).digest(),
+        b"panel-session",
+        hashlib.sha256,
+    ).hexdigest()
 
 _LOGIN_TPL = """<!DOCTYPE html>
 <html lang="zh-CN">
@@ -807,15 +879,9 @@ _LOGIN_TPL = """<!DOCTYPE html>
       __LOGO__
       <div class="name">图恒宇计划</div>
     </div>
-    <p class="sub">给 bot 完整的一生</p>
+    <p class="sub">__SUB__</p>
     __ERR__
-    <form method="post" action="/login">
-      <label for="u">用户名</label>
-      <input id="u" name="username" autocomplete="username" autofocus required>
-      <label for="p">密码</label>
-      <input id="p" name="password" type="password" autocomplete="current-password" required>
-      <button type="submit">登录</button>
-    </form>
+    __FORM__
     <p class="foot">图恒宇计划 · 部署面板</p>
   </div>
 </body>
@@ -823,13 +889,61 @@ _LOGIN_TPL = """<!DOCTYPE html>
 """
 
 
-def _login_page(error: str = "") -> str:
+_LOGIN_FORM = """
+    <form method="post" action="/login">
+      <label for="u">用户名</label>
+      <input id="u" name="username" autocomplete="username" autofocus required>
+      <label for="p">密码</label>
+      <input id="p" name="password" type="password" autocomplete="current-password" required>
+      <button type="submit">登录</button>
+    </form>
+"""
+
+_SETPWD_FORM = """
+    <form method="post" action="/set-password">
+      <label for="p1">新密码（至少 __MIN__ 位）</label>
+      <input id="p1" name="password" type="password" autocomplete="new-password" autofocus required>
+      <label for="p2">再输一遍</label>
+      <input id="p2" name="password2" type="password" autocomplete="new-password" required>
+      <button type="submit">设好了</button>
+    </form>
+"""
+
+
+def _render_page(sub: str, form: str, error: str = "") -> str:
     err = f'<div class="err">{_html.escape(error)}</div>' if error else ""
-    return _LOGIN_TPL.replace("__LOGO__", LOGO_SVG).replace("__ERR__", err)
+    return (
+        _LOGIN_TPL.replace("__LOGO__", LOGO_SVG)
+        .replace("__SUB__", _html.escape(sub))
+        .replace("__FORM__", form)
+        .replace("__ERR__", err)
+    )
+
+
+def _login_page(error: str = "") -> str:
+    return _render_page("给 bot 完整的一生", _LOGIN_FORM, error)
+
+
+def _setpwd_page(error: str = "") -> str:
+    return _render_page(
+        "初始密码是一次性的，先改成自己的",
+        _SETPWD_FORM.replace("__MIN__", str(MIN_PWD_LEN)),
+        error,
+    )
 
 
 def _has_session(request) -> bool:
-    return hmac.compare_digest(request.cookies.get(COOKIE_NAME, ""), _SESSION_TOKEN)
+    return hmac.compare_digest(request.cookies.get(COOKIE_NAME, ""), _session_token())
+
+
+def _grant(target: str) -> _Resp:
+    """下发会话 Cookie 并跳转。"""
+    resp = _Resp(status_code=303, headers={"Location": target})
+    resp.set_cookie(
+        COOKIE_NAME, _session_token(),
+        max_age=7 * 24 * 3600, httponly=True, samesite="lax", path="/",
+    )
+    return resp
 
 
 @app.middleware("http")
@@ -844,21 +958,42 @@ async def _auth(request, call_next):
         form = urllib.parse.parse_qs(body)
         user = form.get("username", [""])[0]
         pwd = form.get("password", [""])[0]
-        # 两个都比较（用 & 而非 and），避免用户名对错影响比较耗时
-        ok = hmac.compare_digest(user, PANEL_USER) & hmac.compare_digest(pwd, PANEL_PASS)
-        if ok:
-            resp = _Resp(status_code=303, headers={"Location": "/"})
-            resp.set_cookie(
-                COOKIE_NAME, _SESSION_TOKEN,
-                max_age=7 * 24 * 3600, httponly=True, samesite="lax", path="/",
+        if not _check_login(user, pwd):
+            return _Resp(_login_page("用户名或密码不对"), media_type="text/html")
+        # 初始密码一律视为临时密码 → 先改密，改完才放行
+        return _grant("/set-password" if _must_change() else "/")
+
+    # --- 改密页：本身就是「首次强制改密」的落点 ---
+    if path == "/set-password":
+        if not _has_session(request):
+            return _Resp(status_code=303, headers={"Location": "/login"})
+        if request.method == "GET":
+            return _Resp(_setpwd_page(), media_type="text/html")
+        body = (await request.body()).decode("utf-8", "replace")
+        form = urllib.parse.parse_qs(body)
+        p1 = form.get("password", [""])[0]
+        p2 = form.get("password2", [""])[0]
+        if len(p1) < MIN_PWD_LEN:
+            return _Resp(_setpwd_page(f"至少 {MIN_PWD_LEN} 位"), media_type="text/html")
+        if p1 != p2:
+            return _Resp(_setpwd_page("两次输入不一致"), media_type="text/html")
+        saved = _load_auth()
+        if not _save_auth(saved["user"] if saved else PANEL_USER, p1):
+            return _Resp(
+                _setpwd_page("写入失败：面板目录不可写，改用 chattr / 手动建 .panel_auth.json"),
+                media_type="text/html",
             )
-            return resp
-        return _Resp(_login_page("用户名或密码不对"), media_type="text/html")
+        # 会话密钥由密码派生 → 这里必须重新下发，否则自己会被踢出去
+        return _grant("/")
 
     if path == "/logout":
         resp = _Resp(status_code=303, headers={"Location": "/login"})
         resp.delete_cookie(COOKIE_NAME, path="/")
         return resp
+
+    # --- 首次未改密：除改密页与登出，一律押到 /set-password ---
+    if _must_change() and path not in ("/set-password", "/logout"):
+        return _Resp(status_code=303, headers={"Location": "/set-password"})
 
     # --- NiceGUI 静态资源：放行（只有 JS / CSS / 字体，不含数据）---
     if path.startswith("/_nicegui/"):

@@ -22,10 +22,11 @@
 **一台全新的 Ubuntu 22.04 / 24.04 服务器**（x86_64，2 核 4G），以 root 执行：
 
 ```bash
-curl -fsSL https://gitee.com/starfishCN/tuhengyu-plan/raw/main/install.sh | bash
+curl -fsSL https://gitee.com/starfishCN/tuhengyu-plan/raw/main/setup.sh | bash
 ```
 
-装完后浏览器访问 `http://<你的IP>:8080`，**跟着面板点按钮**。
+装完终端会打印一个随机生成的初始密码。浏览器访问 `http://<你的IP>:8080`，
+用 `admin` + 这个密码登录，**首次登录会强制改密**，改完跟着面板点按钮。
 
 > 更详细的步骤、每一处坑、排错表，都在 [`tutorial/`](tutorial/README.md)。
 
@@ -54,7 +55,7 @@ QQ ←→ SnowLuma ←(OneBot v11 WS)→ AstrBot ←→ 模型 / 插件
 
 ```
 tuhengyu-plan/
-├── install.sh                  # 一键安装入口（教程第一句用的就是它）
+├── setup.sh                    # 一键安装入口（教程第一句用的就是它）
 ├── main.py                     # 部署面板主程序
 ├── core/                       # 面板核心逻辑
 ├── deploy/                     # 各组件的部署脚本
