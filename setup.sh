@@ -71,8 +71,22 @@ if ! python3 -m venv .venv >/dev/null 2>&1; then
     exit 1
   }
 fi
-./.venv/bin/pip install -U pip
-./.venv/bin/pip install -r requirements.txt
+# ---------- 依赖安装 ----------
+# 有些云机器对 PyPI 没有国际出口（报 Errno 101 Network is unreachable）。
+# 直连失败时自动换国内镜像重试。
+PIP=./.venv/bin/pip
+pip_try() {
+  "$PIP" install "$@" && return 0
+  for _m in https://pypi.tuna.tsinghua.edu.cn/simple https://mirrors.aliyun.com/pypi/simple/; do
+    echo "[图恒宇] 直连 PyPI 失败，改用镜像：${_m}"
+    "$PIP" install -i "${_m}" "$@" && return 0
+  done
+  echo "!! 依赖安装失败。可手动指定镜像后重跑，例如：" >&2
+  echo "   ${PIP} install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt" >&2
+  return 1
+}
+pip_try -U pip
+pip_try -r requirements.txt
 
 # ---------- 初始密码 ----------
 # 不想用随机的，照下面这行自行指定：
