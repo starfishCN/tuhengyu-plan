@@ -22,7 +22,7 @@
 **一台全新的 Ubuntu 22.04 / 24.04 服务器**（x86_64，2 核 4G），以 root 执行：
 
 ```bash
-curl -fsSL https://cdn.jsdelivr.net/gh/starfishCN/tuhengyu-plan@main/setup.sh | bash
+python3 -c "import urllib.request,json,base64;d=json.load(urllib.request.urlopen('https://gitee.com/api/v5/repos/starfishCN/tuhengyu-plan/contents/setup.sh?ref=main'));open('/tmp/setup.sh','wb').write(base64.b64decode(d['content']))" && bash /tmp/setup.sh
 ```
 
 装完终端会打印一个随机生成的初始密码。浏览器访问 `http://<你的IP>:8080`，

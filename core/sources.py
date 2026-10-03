@@ -12,11 +12,17 @@ import time
 import httpx
 
 # ---------- 候选：Docker 镜像加速 ----------
+# 2026-10-03 实测（探测 /v2/，正常 registry 应回 401 鉴权挑战或 200）：
+#   DaoCloud   401 / 212ms  可用
+#   dockerproxy 200 / 2985ms 可用（慢）
+#   南京大学   403           探测有效但 /v2/ 被拒
+#   1panel     403           同上
+#   中科大 / 网易 / rainbond  不可达——已移除
 DOCKER_MIRRORS = [
     {"name": "DaoCloud", "url": "https://docker.m.daocloud.io"},
+    {"name": "dockerproxy", "url": "https://dockerproxy.com"},
     {"name": "南京大学", "url": "https://docker.nju.edu.cn"},
-    {"name": "中科大", "url": "https://docker.mirrors.ustc.edu.cn"},
-    {"name": "网易", "url": "https://hub-mirror.c.163.com"},
+    {"name": "1panel", "url": "https://docker.1panel.live"},
     {"name": "阿里云（需填个人地址）", "url": ""},
 ]
 
@@ -49,7 +55,11 @@ async def _probe(url: str, timeout: float = 6.0) -> dict:
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as c:
             r = await c.get(url)
         ms = round((time.perf_counter() - t0) * 1000)
-        return {"ok": r.status_code < 500, "ms": ms, "status": r.status_code}
+        # 判定「可用」：正常 registry 对 /v2/ 回 401（鉴权挑战）或 2xx/3xx。
+        # 403 是被拒/被墙，不能算可用——此前用 `<500` 会把 403 误判为可用。
+        sc = r.status_code
+        ok = (200 <= sc < 400) or sc == 401
+        return {"ok": ok, "ms": ms, "status": sc}
     except Exception as e:
         return {"ok": False, "ms": None, "err": type(e).__name__}
 
