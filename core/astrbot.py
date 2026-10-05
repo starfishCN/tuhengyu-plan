@@ -14,12 +14,14 @@ ASTRBOT_NETWORK = "maim_bot"
 # 拉镜像：先直连，失败走 DaoCloud 前缀再重打标签（无国际出口机器用；
 # 若面板已配 daemon.json 镜像加速，第一跳即可成功）。
 PULL_CMDS = [
-    f"docker pull {ASTRBOT_IMAGE} || "
+    f"docker image inspect {ASTRBOT_IMAGE} >/dev/null 2>&1 || "
+    f"(docker pull {ASTRBOT_IMAGE} || "
     f"(docker pull m.daocloud.io/docker.io/{ASTRBOT_IMAGE} && "
-    f"docker tag m.daocloud.io/docker.io/{ASTRBOT_IMAGE} {ASTRBOT_IMAGE})",
+    f"docker tag m.daocloud.io/docker.io/{ASTRBOT_IMAGE} {ASTRBOT_IMAGE}))",
 ]
 ASTRBOT_CMDS = PLUGIN_STAGE_CMDS + PULL_CMDS + [
     f"docker network inspect {ASTRBOT_NETWORK} >/dev/null 2>&1 || docker network create {ASTRBOT_NETWORK}",
+    "docker rm -f astrbot >/dev/null 2>&1 || true",
     (
         "docker run -d --name astrbot --restart always "
         f"--network {ASTRBOT_NETWORK} "
