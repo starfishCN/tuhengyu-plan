@@ -51,16 +51,29 @@ if [ -d "${INSTALL_DIR}/.git" ]; then
   echo "[图恒宇] 目录已存在，尝试更新"
   git -C "${INSTALL_DIR}" pull --ff-only
 else
-  # 先 Gitee，后 GitHub
+  # 绝不删除非本项目目录。源码先进入临时目录，成功后才放入目标目录。
+  if [ -e "${INSTALL_DIR}" ]; then
+    if [ -n "$(find "${INSTALL_DIR}" -mindepth 1 -print -quit 2>/dev/null)" ]; then
+      echo "!! 目标目录已存在且不是图恒宇计划仓库：${INSTALL_DIR}" >&2
+      echo "!! 为保护现有文件，安装已停止。请备份后改用 TUHENGYU_DIR 指定空目录。" >&2
+      exit 1
+    fi
+    rmdir "${INSTALL_DIR}"
+  fi
+  CLONE_DIR="${INSTALL_DIR}.download.$$"
+  rm -rf "${CLONE_DIR}"
   ok=0
   for url in "${GITEE_URL}" "${GITHUB_URL}"; do
     echo "[图恒宇] 拉取源码：${url}"
-    if git clone --depth 1 "${url}" "${INSTALL_DIR}"; then
-      ok=1; break
+    rm -rf "${CLONE_DIR}"
+    if git clone --depth 1 "${url}" "${CLONE_DIR}"; then
+      mv "${CLONE_DIR}" "${INSTALL_DIR}"
+      ok=1
+      break
     fi
-    echo "[图恒宇] 该源不可用，尝试下一个"
-    rm -rf "${INSTALL_DIR}"
+    echo "[图恒宇] 该源不可用，保留目标目录不动，尝试下一个"
   done
+  rm -rf "${CLONE_DIR}"
   [ "${ok}" -eq 1 ] || { echo "!! 所有源码源均不可用，请检查网络。" >&2; exit 1; }
 fi
 
