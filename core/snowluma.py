@@ -34,4 +34,10 @@ def snowluma_cmds(proxy_prefix: str = "") -> list:
             url = BASE_URL
         fetch = f"curl -fsSL {url} -o /tmp/snowluma_install.sh"
         run = "bash /tmp/snowluma_install.sh --mode docker --yes"
-    return [fetch, run, "docker ps --filter name=snowluma"]
+    configure = [
+        "test -f ./vendor/snowluma_ws_config.js",
+        "docker cp ./vendor/snowluma_ws_config.js snowluma:/tmp/snowluma_ws_config.js",
+        "docker exec snowluma node /tmp/snowluma_ws_config.js",
+        "docker restart snowluma",
+    ]
+    return [fetch, run, *configure, "docker ps --filter name=snowluma"]
