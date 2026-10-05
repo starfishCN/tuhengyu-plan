@@ -22,7 +22,27 @@
 **一台全新的 Ubuntu 22.04 / 24.04 服务器**（x86_64，2 核 4G），以 root 执行：
 
 ```bash
-python3 -c "import urllib.request,json,base64;d=json.load(urllib.request.urlopen('https://gitee.com/api/v5/repos/starfishCN/tuhengyu-plan/contents/setup.sh?ref=main'));open('/tmp/setup.sh','wb').write(base64.b64decode(d['content']))" && bash /tmp/setup.sh
+if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1; then
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -y && apt-get install -y curl ca-certificates || { echo "无法自动补齐下载工具" >&2; exit 1; }
+fi
+fetch() {
+  if command -v curl >/dev/null 2>&1; then curl -fL --connect-timeout 10 --max-time 60 "$1" -o /tmp/tg-bootstrap.sh
+  elif command -v wget >/dev/null 2>&1; then wget -T 60 -O /tmp/tg-bootstrap.sh "$1"
+  else python3 -c 'import sys,urllib.request; urllib.request.urlretrieve(sys.argv[1], "/tmp/tg-bootstrap.sh")' "$1"
+  fi
+}
+for u in \
+  https://cdn.jsdelivr.net/gh/starfishCN/tuhengyu-plan@main/bootstrap.sh \
+  https://raw.githubusercontent.com/starfishCN/tuhengyu-plan/main/bootstrap.sh \
+  https://gitee.com/starfishCN/tuhengyu-plan/raw/main/bootstrap.sh; do
+  if fetch "$u" && grep -q '^#!/usr/bin/env bash' /tmp/tg-bootstrap.sh; then
+    bash /tmp/tg-bootstrap.sh && exit 0
+  fi
+  rm -f /tmp/tg-bootstrap.sh
+done
+echo "所有入口均不可用，请检查网络或换服务器线路。" >&2
+exit 1
 ```
 
 装完终端会打印一个随机生成的初始密码。浏览器访问 `http://<你的IP>:8080`，
@@ -55,7 +75,8 @@ QQ ←→ SnowLuma ←(OneBot v11 WS)→ AstrBot ←→ 模型 / 插件
 
 ```
 tuhengyu-plan/
-├── setup.sh                    # 一键安装入口（教程第一句用的就是它）
+├── bootstrap.sh                # 新手一键入口（自动补工具并多源兜底）
+├── setup.sh                    # 正式安装脚本
 ├── main.py                     # 部署面板主程序
 ├── core/                       # 面板核心逻辑
 ├── deploy/                     # 各组件的部署脚本
