@@ -9,22 +9,9 @@ import json
 MIRROR = "https://mirrors.tuna.tsinghua.edu.cn/docker-ce/linux/ubuntu"
 
 DOCKER_CMDS = [
-    # 始终返回 0，避免 runner 因非零退出码中断
-    "command -v docker >/dev/null 2>&1 && docker -v || echo 'docker 未安装，开始安装'",
-    "apt-get update",
-    "apt-get install -y ca-certificates curl gnupg",
-    "install -m 0755 -d /etc/apt/keyrings",
-    "curl -fsSL " + MIRROR + "/gpg -o /etc/apt/keyrings/docker.asc",
-    "chmod a+r /etc/apt/keyrings/docker.asc",
-    'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] '
-    + MIRROR
-    + ' $(. /etc/os-release && echo $VERSION_CODENAME) stable"'
-    " > /etc/apt/sources.list.d/docker.list",
-    "apt-get update",
-    "apt-get install -y docker-ce docker-ce-cli containerd.io "
-    "docker-buildx-plugin docker-compose-plugin",
-    "systemctl enable --now docker 2>/dev/null || "
-    "service docker start 2>/dev/null || true",
+    # 已有 Docker 时只校验并启动，避免重复改动系统软件源和软件包。
+    "if command -v docker >/dev/null 2>&1; then echo 'Docker 已安装，跳过安装'; else apt-get update && apt-get install -y ca-certificates curl gnupg && install -m 0755 -d /etc/apt/keyrings && curl -fsSL " + MIRROR + "/gpg -o /etc/apt/keyrings/docker.asc && chmod a+r /etc/apt/keyrings/docker.asc && echo \"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] " + MIRROR + " $(. /etc/os-release && echo $VERSION_CODENAME) stable\" > /etc/apt/sources.list.d/docker.list && apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; fi",
+    "systemctl enable --now docker 2>/dev/null || service docker start 2>/dev/null || true",
     "docker -v",
     "docker compose version",
 ]
@@ -35,11 +22,24 @@ def daemon_json_text(mirror_url: str) -> str:
 
 
 def apply_mirror_cmds(mirror_url: str) -> list:
-    """写入 /etc/docker/daemon.json 并重启 Docker。需 root。"""
-    txt = daemon_json_text(mirror_url)
+    """备份并合并 /etc/docker/daemon.json，然后重启 Docker。需 root。"""
+    import shlex
+
+    quoted = shlex.quote(mirror_url)
     write = (
         "mkdir -p /etc/docker && "
-        "cat > /etc/docker/daemon.json <<'EOF'\n" + txt + "\nEOF\n"
-        "systemctl restart docker 2>/dev/null || service docker restart 2>/dev/null || true"
+        "if [ -f /etc/docker/daemon.json ]; then "
+        "cp -n /etc/docker/daemon.json /etc/docker/daemon.json.tuhengyu.bak; fi && "
+        "python3 -c "
+        + shlex.quote(
+            "import json, pathlib, sys; "
+            "p=pathlib.Path('/etc/docker/daemon.json'); "
+            "data=json.loads(p.read_text()) if p.exists() else {}; "
+            "data['registry-mirrors']=[sys.argv[1]]; "
+            "p.write_text(json.dumps(data, indent=2, ensure_ascii=False)+'\\n')"
+        )
+        + " "
+        + quoted
+        + " && (systemctl restart docker 2>/dev/null || service docker restart 2>/dev/null)"
     )
     return [write, "cat /etc/docker/daemon.json"]
