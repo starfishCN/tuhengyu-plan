@@ -410,6 +410,54 @@ def _dynamic_handler(title, cmds_fn):
     return _h
 
 
+
+async def _auto_deploy():
+    """真小白主流程：体检、Docker、源、AstrBot、SnowLuma、插件。"""
+    if not _guard():
+        return
+    LOG.push("===== 一键自动部署开始 =====")
+    try:
+        for title, cmds in (("环境体检", CHECK_CMDS), ("安装 Docker", DOCKER_CMDS)):
+            LOG.push(f"--- {title} ---")
+            code = await run_stream_all(cmds, LOG.push)
+            if code != 0:
+                LOG.push(f"!! {title}失败。请只处理上面最后一条错误，再重新点击本按钮。")
+                ui.notify(f"{title}失败，请查看日志最后一条错误", type="negative")
+                return
+
+        LOG.push("--- 自动测速并应用 Docker 镜像源 ---")
+        results = await sources.test_all(sources.DOCKER_MIRRORS, sources.docker_mirror_url)
+        best = sources.pick_best(results)
+        if not best:
+            LOG.push("!! 没有可用的 Docker 镜像源。请更换服务器线路，或准备代理/镜像中转。")
+            ui.notify("没有可用镜像源，自动部署已暂停", type="negative")
+            return
+        STATE["mirror"] = best
+        LOG.push(f"自动选中：{best['name']}（{best['result'].get('ms')} ms）")
+        code = await run_stream_all(apply_mirror_cmds(best["url"]), LOG.push)
+        if code != 0:
+            LOG.push("!! Docker 镜像源应用失败。请检查 Docker 服务状态后重新点击本按钮。")
+            ui.notify("镜像源应用失败，自动部署已暂停", type="negative")
+            return
+
+        stages = [
+            ("安装 AstrBot", ASTRBOT_CMDS),
+            ("安装 SnowLuma", snowluma_cmds(STATE["proxy"]["prefix"] if STATE["proxy"] else "")),
+            ("装配套插件", PLUGIN_INSTALL_CMDS),
+        ]
+        for title, cmds in stages:
+            LOG.push(f"--- {title} ---")
+            code = await run_stream_all(cmds, LOG.push)
+            if code != 0:
+                LOG.push(f"!! {title}失败。请只处理上面最后一条错误，再重新点击本按钮。")
+                ui.notify(f"{title}失败，请查看日志最后一条错误", type="negative")
+                return
+        LOG.push("===== 一键自动部署完成 =====")
+        ui.notify("自动部署完成，请查看凭据并按教程登录 QQ", type="positive")
+    finally:
+        STATE["busy"] = False
+        LOG.push("===== 一键自动部署结束 =====")
+
 # ---------------------------------------------------------------- 网络源
 
 def source_section():
@@ -626,44 +674,19 @@ def index():
     with ui.column().classes("tg-main w-full max-w-5xl mx-auto gap-4 p-4"):
 
         with ui.card().classes("tg-card w-full"):
-            ui.label("部署步骤").classes("text-sm font-semibold opacity-70")
-            with ui.row().classes("gap-2 w-full"):
-                ui.button(
-                    "① 环境体检",
-                    icon="health_and_safety",
-                    on_click=_handler("环境体检", CHECK_CMDS),
-                ).classes("tg-step")
-                ui.button(
-                    "② 安装 Docker",
-                    icon="inventory_2",
-                    on_click=_handler("安装 Docker", DOCKER_CMDS),
-                ).classes("tg-step")
-                ui.button(
-                    "③ 安装 SnowLuma",
-                    icon="chat",
-                    on_click=_dynamic_handler(
-                        "安装 SnowLuma",
-                        lambda: snowluma_cmds(
-                            STATE["proxy"]["prefix"] if STATE["proxy"] else ""
-                        ),
-                    ),
-                ).classes("tg-step")
-                ui.button(
-                    "④ 安装 AstrBot",
-                    icon="smart_toy",
-                    on_click=_handler("安装 AstrBot", ASTRBOT_CMDS),
-                ).classes("tg-step")
-                ui.button(
-                    "⑤ 连线（待实现）",
-                    icon="link_off",
-                    on_click=lambda: ui.notify("待实现", type="info"),
-                ).classes("tg-step")
-                ui.button(
-                    "⑥ 装配套插件",
-                    icon="extension",
-                    on_click=_handler("装配套插件", PLUGIN_INSTALL_CMDS),
-                ).classes("tg-step")
+            ui.label("新手入口").classes("text-sm font-semibold opacity-70")
+            ui.label("只点下面这一个按钮。面板会按正确顺序完成体检、Docker、换源和组件部署。失败时看日志最后一条。").classes("text-sm opacity-75")
+            ui.button("开始自动部署", icon="rocket_launch", on_click=_auto_deploy).props("color=primary size=lg").classes("tg-step w-full")
+            ui.label("预计需要较长时间。不要重复点击，也不要中途关闭页面。").classes("text-xs opacity-60")
 
+        with ui.expansion("高级模式：单独执行步骤", icon="build", value=False).classes("tg-card w-full"):
+            ui.label("只有自动部署失败、需要重试单个步骤时才使用这里。普通用户无需打开。").classes("text-xs opacity-60")
+            with ui.row().classes("gap-2 w-full"):
+                ui.button("环境体检", icon="health_and_safety", on_click=_handler("环境体检", CHECK_CMDS)).classes("tg-step")
+                ui.button("安装 Docker", icon="inventory_2", on_click=_handler("安装 Docker", DOCKER_CMDS)).classes("tg-step")
+                ui.button("安装 SnowLuma", icon="chat", on_click=_dynamic_handler("安装 SnowLuma", lambda: snowluma_cmds(STATE["proxy"]["prefix"] if STATE["proxy"] else ""))).classes("tg-step")
+                ui.button("安装 AstrBot", icon="smart_toy", on_click=_handler("安装 AstrBot", ASTRBOT_CMDS)).classes("tg-step")
+                ui.button("装配套插件", icon="extension", on_click=_handler("装配套插件", PLUGIN_INSTALL_CMDS)).classes("tg-step")
         with ui.expansion("网络源（测速 / 自动选优）", icon="tune", value=True).classes(
             "tg-card w-full"
         ):
