@@ -30,6 +30,7 @@ from core.astrbot import ASTRBOT_CMDS
 from core import sources
 from core import credentials
 from core.plugin import PLUGIN_INSTALL_CMDS
+from core import offline
 
 STATE = {"busy": False, "mirror": None, "proxy": None}
 LOG = None
@@ -614,6 +615,66 @@ def _port_table_html() -> str:
     return "".join(out)
 
 
+def offline_image_section():
+    ui.markdown(
+        "网络线路无法下载镜像分层时，可先在可联网的 Docker 电脑执行 "
+        "`docker save -o snowluma.tar motricseven7/snowluma:latest`，"
+        "再把 tar 包传到这里。上传仅保存到面板私有目录；点击导入后会运行 `docker load` 并检查镜像标签。"
+    )
+    status = ui.column().classes("w-full")
+    packages = ui.column().classes("w-full")
+
+    async def refresh_packages():
+        packages.clear()
+        with packages:
+            items = offline.list_packages()
+            if not items:
+                ui.label("尚无已上传的镜像包。").classes("text-sm opacity-60")
+            for package in items:
+                size_mb = package.stat().st_size / (1024 * 1024)
+                with ui.row().classes("items-center gap-2 w-full"):
+                    ui.label(f"{package.name} · {size_mb:.1f} MiB").classes("text-sm")
+                    async def import_package(path=package):
+                        if not _guard():
+                            return
+                        await _run(f"导入离线镜像：{path.name}", offline.import_cmds(path))
+                    ui.button("导入并检查", icon="inventory_2", on_click=import_package).classes("tg-step")
+
+    async def receive_upload(event):
+        try:
+            filename = offline.safe_upload_name(event.name)
+            offline.ensure_upload_dir()
+            target = offline.unique_upload_path(filename)
+            size = 0
+            with target.open("wb") as output:
+                while chunk := await event.file.read(1024 * 1024):
+                    size += len(chunk)
+                    if size > offline.MAX_PACKAGE_BYTES:
+                        output.close()
+                        target.unlink(missing_ok=True)
+                        raise ValueError("文件超过 30 GiB 上限")
+                    output.write(chunk)
+            if size == 0:
+                target.unlink(missing_ok=True)
+                raise ValueError("上传文件为空")
+            status.clear()
+            with status:
+                ui.label(f"已接收 {filename}（{size / (1024 * 1024):.1f} MiB）").classes("text-positive")
+        except Exception as exc:
+            status.clear()
+            with status:
+                ui.label(f"上传失败：{exc}").classes("text-negative")
+        await refresh_packages()
+
+    ui.upload(on_upload=receive_upload, auto_upload=True, max_file_size=offline.MAX_PACKAGE_BYTES).props(
+        "accept=.tar,.gz multiple=false"
+    ).classes("w-full")
+    ui.label("支持 Docker 导出的 .tar、.tar.gz、.tgz；单文件最大 30 GiB。上传后仍需点击导入。").classes("text-xs opacity-60")
+    status
+    packages
+    ui.timer(0.1, refresh_packages, once=True)
+
+
 def credential_section():
     ui.markdown(
         "装完之后，各家控制台的密码分散在**容器日志**和**环境变量**里，"
@@ -691,6 +752,9 @@ def index():
             "tg-card w-full"
         ):
             source_section()
+
+        with ui.expansion("离线镜像包上传 / 导入", icon="upload_file", value=False).classes("tg-card w-full"):
+            offline_image_section()
 
         with ui.expansion("找不到密码？点这里读初始凭据", icon="key", value=False).classes(
             "tg-card w-full"

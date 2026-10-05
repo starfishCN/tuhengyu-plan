@@ -1,4 +1,6 @@
 __pycache__/
+.uploads/
+
 *.py[cod]
 .venv/
 venv/
