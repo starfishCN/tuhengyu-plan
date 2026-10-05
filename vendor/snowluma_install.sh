@@ -623,6 +623,8 @@ services:
       - qq-gateway-data:/app/data
       - qq-client-config:/app/.config
       - qq-client-data:/app/.local/share
+    networks:
+      - botnet
 
 volumes:
   qq-gateway-data:
@@ -631,6 +633,11 @@ volumes:
     name: qq-client-config
   qq-client-data:
     name: qq-client-data
+
+networks:
+  botnet:
+    external: true
+    name: ${SNOWLUMA_BOT_NETWORK:-maim_bot}
 YAML
 }
 
