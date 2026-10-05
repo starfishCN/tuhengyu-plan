@@ -479,6 +479,34 @@ def source_section():
     ).classes("tg-step")
     ui.label("会写入 daemon.json 并重启 Docker").classes("text-xs opacity-55")
 
+    async def speedtest_and_apply():
+        # 真小白入口：测速、选优、写配置一次完成。
+        if not _guard():
+            return
+        LOG.push("===== 一键测速并应用最优 Docker 源 =====")
+        try:
+            results = await sources.test_all(sources.DOCKER_MIRRORS, sources.docker_mirror_url)
+            best = sources.pick_best(results)
+            if not best:
+                LOG.push("!! 没有可用的 Docker 镜像源")
+                ui.notify("没有可用镜像源，请换线路或使用代理/镜像中转", type="negative")
+                return
+            mirror_select.value = best["url"]
+            mirror_select.update()
+            mirror_status.text = f"镜像加速：{best['name']}（已自动选中）"
+            await _run("应用最优 Docker 镜像加速", apply_mirror_cmds(best["url"]))
+        finally:
+            # _run 会释放 busy；若测速阶段提前结束，这里负责释放。
+            STATE["busy"] = False
+            LOG.push("===== 一键测速并应用最优 Docker 源结束 =====")
+
+    ui.button(
+        "小白模式：自动测速并应用",
+        icon="auto_fix_high",
+        on_click=speedtest_and_apply,
+    ).props("color=primary").classes("tg-step")
+    ui.label("不需要手动挑选，成功后再安装 Docker").classes("text-xs opacity-55")
+
 
 # ---------------------------------------------------------------- 凭据
 

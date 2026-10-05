@@ -22,8 +22,29 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-command -v python3 >/dev/null 2>&1 || { echo "!! 缺 python3，请先装。" >&2; exit 1; }
-command -v git >/dev/null 2>&1 || { echo "!! 缺 git，请先装。" >&2; exit 1; }
+# ---------- 基础工具自动补齐 ----------
+# 面向最小化 VPS：缺工具时自动安装，用户无需先查命令。
+need_cmds=()
+for _c in python3 git curl ca-certificates; do
+  command -v "${_c}" >/dev/null 2>&1 || need_cmds+=("${_c}")
+done
+if [ "${#need_cmds[@]}" -gt 0 ]; then
+  echo "[图恒宇] 缺少基础工具：${need_cmds[*]}，尝试自动安装"
+  if command -v apt-get >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y
+    apt-get install -y python3 git curl ca-certificates
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y python3 git curl ca-certificates
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y python3 git curl ca-certificates
+  else
+    echo "!! 找不到 apt、dnf 或 yum，无法自动安装基础工具：${need_cmds[*]}" >&2
+    exit 1
+  fi
+fi
+command -v python3 >/dev/null 2>&1 || { echo "!! python3 自动安装失败。" >&2; exit 1; }
+command -v git >/dev/null 2>&1 || { echo "!! git 自动安装失败。" >&2; exit 1; }
 
 # 就地更新
 if [ -d "${INSTALL_DIR}/.git" ]; then
@@ -77,7 +98,7 @@ fi
 PIP=./.venv/bin/pip
 pip_try() {
   "$PIP" install "$@" && return 0
-  for _m in https://pypi.tuna.tsinghua.edu.cn/simple https://mirrors.aliyun.com/pypi/simple/; do
+  for _m in https://pypi.tuna.tsinghua.edu.cn/simple https://mirrors.aliyun.com/pypi/simple/ https://pypi.mirrors.ustc.edu.cn/simple; do
     echo "[图恒宇] 直连 PyPI 失败，改用镜像：${_m}"
     "$PIP" install -i "${_m}" "$@" && return 0
   done
@@ -85,8 +106,8 @@ pip_try() {
   echo "   ${PIP} install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt" >&2
   return 1
 }
-pip_try -U pip
-pip_try -r requirements.txt
+pip_try -U pip --timeout 20 --retries 1
+pip_try -r requirements.txt --timeout 20 --retries 1
 
 # ---------- 初始密码 ----------
 # 不想用随机的，照下面这行自行指定：
