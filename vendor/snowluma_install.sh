@@ -781,11 +781,12 @@ compose_up() {
   local cc
   cc="$(compose_cmd)"
   [[ -n "${cc}" ]] || die '没有 docker compose。'
-  if [[ "${MODE}" == compose ]]; then
-    if ! docker network inspect "${BOT_NETWORK}" >/dev/null 2>&1; then
-      die "找不到外部网络 ${BOT_NETWORK}。先把机器人那一套 compose 拉起来，或 docker network ls 后把 --network 换成实际名字。"
-    fi
-    ok "外部网络 ${BOT_NETWORK}"
+  if ! docker network inspect "${BOT_NETWORK}" >/dev/null 2>&1; then
+    step "创建容器网络 ${BOT_NETWORK}"
+    docker network create "${BOT_NETWORK}" >/dev/null
+    ok "容器网络 ${BOT_NETWORK}"
+  else
+    ok "容器网络 ${BOT_NETWORK}"
   fi
   if docker ps -a --format '{{.Names}}' | grep -qx snowluma; then
     confirm '已有名为 snowluma 的容器。删除并重建？（数据卷会保留）' || die '已取消。'
