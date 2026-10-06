@@ -20,11 +20,11 @@ BUNDLE_URLS = tuple(
 def image_prepare_cmds() -> list[str]:
     bundle_dir = shlex.quote(str(BUNDLE_DIR))
     bundle = shlex.quote(str(BUNDLE_DIR / "tuhengyu-images.tar"))
-    urls = " ".join(shlex.quote(url) for url in BUNDLE_URLS)
+    urls = " ".join(shlex.quote(url) for url in BUNDLE_URLS) or "''"
     return [
         "command -v docker >/dev/null 2>&1 || { echo 'Docker 尚未安装'; exit 20; }",
         f"docker image inspect {ASTRBOT_IMAGE} >/dev/null 2>&1 && docker image inspect {SNOWLUMA_IMAGE} >/dev/null 2>&1 || "
-        f"{{ found=0; for url in {urls or '""'}; do "
+        f"{{ found=0; for url in {urls}; do "
         f"echo '正在准备组件，请保持页面打开'; mkdir -p {bundle_dir}; "
         f"if curl -fL --retry 2 --connect-timeout 15 --max-time 3600 \"$url\" -o {bundle} && "
         f"test -s {bundle} && docker load -i {bundle}; then found=1; break; "
