@@ -228,31 +228,63 @@ html:not(.tg-in) .tg-main > * {
   .tg-nat { display: block; }
   .tg-nat strong { display: block; margin-bottom: 3px; }
 }
-/* ---------- 步骤按钮：毛玻璃 ---------- */
-.tg-step {
-  border-radius: 12px !important;
+/* ---------- 操作按钮：高级感交互 ---------- */
+.tg-step, .tg-cta {
+  position: relative; overflow: hidden;
+  border-radius: 13px !important;
   text-transform: none !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
   letter-spacing: .01em !important;
-  /* 半透明渐变 + 背后模糊 = 玻璃质感。
-     渐变做出「上缘受光」的错觉，内阴影补一道高光边。 */
-  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.035)) !important;
-  border: 1px solid rgba(255,255,255,.14) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.13),
-    0 4px 14px rgba(0,0,0,.22) !important;
-  backdrop-filter: blur(10px) saturate(150%);
-  -webkit-backdrop-filter: blur(10px) saturate(150%);
-  transition: background .2s, border-color .2s, box-shadow .2s !important;
+  transition: transform .22s cubic-bezier(.22,1,.36,1),
+              box-shadow .22s ease, border-color .22s ease,
+              filter .22s ease !important;
 }
+.tg-step {
+  background: linear-gradient(180deg, rgba(255,255,255,.78), rgba(241,245,249,.82)) !important;
+  border: 1px solid rgba(15,23,42,.12) !important;
+  box-shadow: 0 5px 14px rgba(15,23,42,.10), inset 0 1px 0 rgba(255,255,255,.9) !important;
+}
+.tg-cta {
+  min-height: 64px !important;
+  color: #fff !important;
+  border: 1px solid rgba(255,255,255,.42) !important;
+  box-shadow: 0 10px 22px rgba(14,116,144,.22), inset 0 1px 0 rgba(255,255,255,.4) !important;
+}
+.tg-cta::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, transparent 25%, rgba(255,255,255,.38) 46%, transparent 66%);
+  transform: translateX(-130%); transition: transform .7s cubic-bezier(.16,1,.3,1);
+}
+.tg-cta::after {
+  content: ""; position: absolute; inset: 1px; border-radius: 12px; pointer-events: none;
+  border: 1px solid rgba(255,255,255,.18); opacity: .7;
+}
+.tg-cta-primary { background: linear-gradient(135deg, #0284c7, #2563eb) !important; }
+.tg-cta-secondary { background: linear-gradient(135deg, #0891b2, #0f766e) !important; }
+.tg-cta:hover, .tg-step:hover {
+  transform: translateY(-3px);
+  filter: saturate(1.12);
+}
+.tg-cta:hover {
+  box-shadow: 0 16px 30px rgba(14,116,144,.30), 0 0 0 4px rgba(14,165,233,.10), inset 0 1px 0 rgba(255,255,255,.52) !important;
+}
+.tg-cta:hover::before { transform: translateX(130%); }
 .tg-step:hover {
-  background: linear-gradient(180deg, rgba(255,255,255,.15), rgba(255,255,255,.06)) !important;
-  border-color: rgba(34,211,238,.38) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.18),
-    0 6px 20px rgba(34,211,238,.14) !important;
+  border-color: rgba(14,165,233,.42) !important;
+  box-shadow: 0 10px 22px rgba(14,165,233,.14), inset 0 1px 0 rgba(255,255,255,.95) !important;
 }
-.tg-step:active { transform: translateY(1px); }
+.tg-cta:active, .tg-step:active {
+  transform: translateY(1px) scale(.985);
+  transition-duration: .08s !important;
+}
+.tg-cta .q-icon { animation: tg-icon-idle 3.5s ease-in-out infinite; }
+.tg-cta:hover .q-icon { animation: tg-icon-hover .65s ease-in-out infinite alternate; }
+@keyframes tg-icon-idle { 0%, 78%, 100% { transform: translateY(0) rotate(0); } 86% { transform: translateY(-2px) rotate(-4deg); } 93% { transform: translateY(0) rotate(3deg); } }
+@keyframes tg-icon-hover { to { transform: translateY(-2px) rotate(7deg) scale(1.08); } }
+.body--dark .tg-step { background: linear-gradient(180deg, rgba(51,65,85,.9), rgba(30,41,59,.92)) !important; border-color: rgba(148,163,184,.28) !important; }
+@media (prefers-reduced-motion: reduce) {
+  .tg-cta::before, .tg-cta .q-icon, .tg-hero::after { animation: none !important; transition: none !important; }
+}
 
 /* 图标与中文混排的对齐：
    Material Icons 的字形基线是按英文调的，与中文并排时容易显得上下不齐。
@@ -946,8 +978,8 @@ def index():
                 '</div>', sanitize=False
             )
             with ui.row().classes("w-full gap-2"):
-                ui.button("1. 部署必要软件", icon="rocket_launch", on_click=_auto_deploy).props("color=primary size=lg").classes("flex-1")
-                ui.button("2. 扫码后完成设置", icon="settings", on_click=_open_post_setup).props("color=secondary size=lg").classes("flex-1")
+                ui.button("1. 部署必要软件", icon="rocket_launch", on_click=_auto_deploy).props("unelevated size=lg").classes("tg-cta tg-cta-primary flex-1")
+                ui.button("2. 扫码后完成设置", icon="settings", on_click=_open_post_setup).props("unelevated size=lg").classes("tg-cta tg-cta-secondary flex-1")
             ui.html(
                 '<div class="tg-nat">'
                 '<strong>⚠ NAT 用户先看</strong>'
