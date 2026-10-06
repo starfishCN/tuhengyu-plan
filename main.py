@@ -749,6 +749,27 @@ CSS += """
 .q-btn.tg-novnc-btn:hover { background: rgba(111,91,42,.78) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 20px 38px rgba(0,0,0,.38), 0 0 34px rgba(255,207,101,.25) !important; }
 """
 
+CSS += """
+/* Final geometry and palette lock */
+.tg-main > .q-card, .tg-main > .q-expansion, .tg-main > .q-card__section,
+.tg-main .q-expansion, .tg-main .q-expansion-item { width: 100% !important; max-width: none !important; }
+.tg-actions, .tg-novnc-actions, .tg-utility, .tg-port-input { width: 100% !important; max-width: none !important; }
+.q-btn.tg-deploy, .q-btn.tg-finish, .q-btn.tg-utility, .q-btn.tg-novnc-btn {
+  width: 100% !important; min-width: 0 !important; max-width: none !important;
+  background: rgba(29,36,34,.72) !important; background-color: rgba(29,36,34,.72) !important;
+  background-image: none !important; color: #e8eee8 !important;
+  border-color: rgba(197,210,194,.34) !important;
+}
+.q-btn.tg-deploy:hover, .q-btn.tg-finish:hover, .q-btn.tg-utility:hover, .q-btn.tg-novnc-btn:hover {
+  background: rgba(52,61,55,.84) !important; background-color: rgba(52,61,55,.84) !important;
+  background-image: none !important; border-color: rgba(226,235,215,.66) !important;
+}
+.q-btn.tg-novnc-btn { background: rgba(45,51,39,.76) !important; background-color: rgba(45,51,39,.76) !important; border-color: rgba(220,207,151,.48) !important; }
+.q-btn.tg-novnc-btn:hover { background: rgba(67,72,48,.88) !important; background-color: rgba(67,72,48,.88) !important; }
+.tg-main .q-linear-progress, .tg-main .tg-status, .tg-main .tg-hero { width: 100% !important; max-width: none !important; }
+.tg-main .q-field { width: 100% !important; max-width: none !important; }
+"""
+
 # 复制函数：http 下 navigator.clipboard 不可用，必须用 execCommand 回退
 COPY_JS = """
 <script>
