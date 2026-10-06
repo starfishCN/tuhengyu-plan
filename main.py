@@ -32,7 +32,7 @@ from core import sources
 from core import credentials
 from core.plugin import PLUGIN_INSTALL_CMDS
 from core import offline
-
+from core.post_setup import setup_after_qq_login
 STATE = {"busy": False, "mirror": None, "proxy": None}
 LOG = None
 DEPLOY_VIEW = {"status": None, "stage": None, "progress": None}
@@ -473,10 +473,36 @@ def _dynamic_handler(title, cmds_fn):
         if not _guard():
             return
         await _run(title, cmds_fn())
-
     return _h
 
+async def _open_post_setup():
+    with ui.dialog() as dialog, ui.card().classes("w-full max-w-md"):
+        ui.label("扫码登录后完成设置").classes("text-lg font-semibold")
+        ui.label("请输入当前 AstrBot 控制台密码。密码只用于本次设置，不会保存。")
+        password_input = ui.input("AstrBot 密码", password=True, password_toggle_button=True).props("autofocus").classes("w-full")
+        with ui.row().classes("w-full justify-end gap-2"):
+            ui.button("取消", on_click=dialog.close).props("flat")
+            async def submit():
+                dialog.close()
+                await _post_login_setup(password_input.value or "")
+            ui.button("开始设置", icon="settings", on_click=submit).props("color=primary")
+    dialog.open()
 
+async def _post_login_setup(password: str):
+    if not _guard():
+        return
+    _set_task("正在执行", "扫码登录后配置 AstrBot", 0)
+    LOG.push("===== 扫码登录后配置开始 =====")
+    try:
+        message = await setup_after_qq_login(password)
+        _set_task("已完成", message, 1)
+        LOG.push(message)
+        ui.notify(message, type="positive")
+    except Exception as exc:
+        _show_failure("扫码登录后配置", [str(exc)], "请确认已扫码登录 QQ，且 AstrBot 正常运行")
+    finally:
+        STATE["busy"] = False
+        LOG.push("===== 扫码登录后配置结束 =====")
 
 async def _auto_deploy():
     """真小白主流程：体检、Docker、源、AstrBot、SnowLuma、插件。"""
@@ -817,7 +843,9 @@ def index():
         with ui.card().classes("tg-card w-full"):
             ui.label("安装机器人").classes("text-xl font-semibold")
             ui.label("点击下面的按钮，面板会自动安装所需组件。无需电脑操作。页面保持打开，完成后按提示登录 QQ。")
-            ui.button("开始安装", icon="rocket_launch", on_click=_auto_deploy).props("color=primary size=lg").classes("w-full")
+            with ui.row().classes("w-full gap-2"):
+                ui.button("1. 部署必要软件", icon="rocket_launch", on_click=_auto_deploy).props("color=primary size=lg").classes("flex-1")
+                ui.button("2. 扫码后完成设置", icon="settings", on_click=_open_post_setup).props("color=secondary size=lg").classes("flex-1")
         with ui.card().classes("tg-card w-full"):
             with ui.row().classes("w-full items-center justify-between"):
                 ui.label("安装状态").classes("text-sm font-semibold opacity-70")
