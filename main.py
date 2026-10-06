@@ -668,22 +668,25 @@ def source_section():
 def _cred_table_html(rows: list) -> str:
     out = [
         '<div class="tg-wrap"><table class="tg-table"><thead><tr>',
-        "<th>服务</th><th>用户名</th><th>端口</th><th>初始密码</th><th></th>",
+        "<th>服务</th><th>用户名</th><th>端口</th><th>密码说明</th><th></th>",
         "</tr></thead><tbody>",
     ]
     for r in rows:
         name = _html.escape(r["name"])
         username = _html.escape(r.get("username", "")) or "—"
         if r["ok"]:
-            pw = _html.escape(r["value"])
-            quoted = json.dumps(r["value"])  # 安全地嵌入 onclick
+            if r.get("key") == "astrbot":
+                pw = "请在第二步输入当前密码"
+                quoted = ""
+            else:
+                pw = _html.escape(r["value"])
+                quoted = json.dumps(r["value"])  # 安全地嵌入 onclick
             out.append(
                 f"<tr><td>{name}</td>"
                 f"<td>{username}</td>"
                 f'<td class="tg-port">{r["port"]}</td>'
                 f'<td class="tg-pw">{pw}</td>'
-                f'<td><button class="tg-copy" '
-                f"onclick='tgCopy(this, {quoted})'>复制</button></td></tr>"
+                + (f'<td><button class="tg-copy" onclick=\'tgCopy(this, {quoted})\'>复制</button></td></tr>' if quoted else '<td></td></tr>')
             )
         else:
             out.append(
@@ -788,8 +791,8 @@ def offline_image_section():
 
 def credential_section():
     ui.markdown(
-        "装完之后，各家控制台的密码分散在**容器日志**和**环境变量**里，"
-        "新手很难找到。点下面的按钮，面板替你读出来。"
+        "这里显示的是登录信息。AstrBot 的密码以你**当前实际密码**为准；"
+        "修改密码后，刷新本表不会改变密码。第二步设置时会再次要求输入当前密码。"
     )
 
     box = ui.column().classes("w-full")
@@ -842,7 +845,8 @@ def index():
     with ui.column().classes("tg-main w-full max-w-2xl mx-auto gap-4 p-4"):
         with ui.card().classes("tg-card w-full"):
             ui.label("安装机器人").classes("text-xl font-semibold")
-            ui.label("点击下面的按钮，面板会自动安装所需组件。无需电脑操作。页面保持打开，完成后按提示登录 QQ。")
+            ui.label("按顺序完成两步。第一步安装软件，第二步在 QQ 扫码登录后自动配置连接。不要跳过顺序。")
+            ui.label("流程：部署必要软件 → 打开 noVNC 扫码登录 QQ → 输入当前 AstrBot 密码完成设置。").classes("text-sm opacity-75")
             with ui.row().classes("w-full gap-2"):
                 ui.button("1. 部署必要软件", icon="rocket_launch", on_click=_auto_deploy).props("color=primary size=lg").classes("flex-1")
                 ui.button("2. 扫码后完成设置", icon="settings", on_click=_open_post_setup).props("color=secondary size=lg").classes("flex-1")
@@ -862,8 +866,8 @@ def index():
                 progress_bar.visible = False
             else:
                 percent_label.text = f"{round(DEPLOY_VIEW['progress'] * 100)}%"
-        with ui.expansion("安装完成后：登录 QQ", icon="qr_code_scanner", value=False).classes("tg-card w-full"):
-            ui.label("先完成组件安装，再展开此处查看登录方式和初始凭据。")
+        with ui.expansion("第 1 步完成后：扫码登录 QQ", icon="qr_code_scanner", value=False).classes("tg-card w-full"):
+            ui.label("先完成第一步，再读取 noVNC 地址和密码。在远程桌面中用手机 QQ 扫码登录，看到 QQ 主界面后再点击上面的第 2 步。")
             credential_section()
         ui.link("管理员工具", "/admin").classes("text-xs opacity-50")
 
