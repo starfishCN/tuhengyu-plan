@@ -455,6 +455,58 @@ body::after { content: ""; position: fixed; z-index: -1; left: 0; right: 0; top:
 @media (max-width: 640px) { .tg-brand::after { display: none; } .tg-main { padding-top: 1.25rem !important; } .tg-hero { padding: 1.25rem !important; } .tg-flow { gap: 7px; } .tg-flow::before { display: none; } .tg-flow-item { min-height: 0; padding: 11px 12px; } .tg-flow-badge { width: 31px; height: 31px; margin: 0 8px 0 0; vertical-align: middle; } .tg-flow-text { display: inline; } }
 """
 
+# 最终视觉覆盖：必须放在全部旧样式之后，避免主题规则互相覆盖。
+CSS += """
+/* ---------- Final visual override ---------- */
+.tg-flow { position: relative !important; display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 12px !important; }
+.tg-flow::before {
+  content: "" !important; display: block !important; position: absolute !important;
+  z-index: 0 !important; left: 6% !important; right: 6% !important; top: 34px !important;
+  height: 2px !important; border: 0 !important; opacity: 1 !important;
+  background: linear-gradient(90deg, transparent, #54e6ff 12%, #63f5c7 50%, #9a8cff 88%, transparent) !important;
+  box-shadow: 0 0 8px rgba(84,230,255,.55), 0 0 22px rgba(99,245,199,.24) !important;
+  animation: tg-line-breathe 2.8s ease-in-out infinite !important;
+}
+.tg-flow::after {
+  content: "" !important; display: block !important; position: absolute !important;
+  z-index: 2 !important; top: 29px !important; left: 6% !important; width: 52px !important; height: 12px !important;
+  border-radius: 999px !important; pointer-events: none !important;
+  background: linear-gradient(90deg, transparent, #fff, #54e6ff, transparent) !important;
+  filter: blur(2px) !important; opacity: .95 !important;
+  animation: tg-line-pulse 3.2s cubic-bezier(.45,0,.55,1) infinite !important;
+}
+@keyframes tg-line-pulse {
+  0% { transform: translateX(0); opacity: 0; }
+  8% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { transform: translateX(calc(100% / .88)); opacity: 0; }
+}
+@keyframes tg-line-breathe { 0%,100% { opacity: .52; } 50% { opacity: 1; } }
+.tg-flow-item { position: relative !important; z-index: 3 !important; background: rgba(7,19,31,.96) !important; border: 1px solid rgba(123,183,202,.22) !important; box-shadow: 0 12px 28px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.055) !important; }
+.tg-flow-item:hover { border-color: rgba(84,230,255,.78) !important; box-shadow: 0 18px 38px rgba(0,0,0,.38), 0 0 28px rgba(84,230,255,.15) !important; }
+.tg-flow-badge { position: relative !important; z-index: 4 !important; background: #0b2532 !important; border: 1px solid #54e6ff !important; color: #bff9ff !important; box-shadow: 0 0 0 4px #071521, 0 0 16px rgba(84,230,255,.42) !important; }
+.tg-flow-item:nth-child(2) .tg-flow-badge { border-color: #63f5c7 !important; color: #baffeb !important; background: #0b2c2b !important; }
+.tg-flow-item:nth-child(3) .tg-flow-badge { border-color: #9a8cff !important; color: #ddd8ff !important; background: #17152f !important; }
+.tg-cta, .tg-cta-primary, .tg-cta-secondary {
+  min-height: 68px !important; color: #d9faff !important;
+  background: #0b1a29 !important; border: 1px solid rgba(123,183,202,.34) !important;
+  border-radius: 14px !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 12px 26px rgba(0,0,0,.28) !important;
+}
+.tg-cta-primary { border-left: 3px solid #54e6ff !important; }
+.tg-cta-secondary { border-left: 3px solid #63f5c7 !important; }
+.tg-cta::before { background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,.16) 48%, transparent 72%) !important; }
+.tg-cta:hover, .tg-cta-primary:hover, .tg-cta-secondary:hover {
+  background: #10293a !important; border-color: rgba(84,230,255,.7) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 18px 34px rgba(0,0,0,.38), 0 0 24px rgba(84,230,255,.14) !important;
+}
+.tg-cta .q-icon { color: #54e6ff !important; }
+.tg-cta-secondary .q-icon { color: #63f5c7 !important; }
+@media (max-width: 640px) {
+  .tg-flow { display: grid !important; gap: 7px !important; }
+  .tg-flow::before, .tg-flow::after { display: none !important; }
+}
+"""
+
 # 复制函数：http 下 navigator.clipboard 不可用，必须回退到 execCommand
 COPY_JS = """
 <script>
