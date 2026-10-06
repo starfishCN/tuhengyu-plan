@@ -612,13 +612,18 @@ PARTICLE_JS = """
   function frame(t) {
     ctx.clearRect(0, 0, width, height);
     for (const p of dots) {
-      p.x += p.vx; p.y += p.vy; p.phase += .018;
+      p.x += p.vx; p.y += p.vy; p.phase += .035;
       if (p.x < -8) p.x = width + 8; if (p.x > width + 8) p.x = -8;
       if (p.y < -8) p.y = height + 8; if (p.y > height + 8) p.y = -8;
-      const alpha = p.a * (.72 + Math.sin(p.phase) * .28);
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fillStyle = Math.random() > .5 ? `rgba(238,250,255,${alpha})` : `rgba(190,239,229,${alpha})`;
-      ctx.shadowBlur = 7; ctx.shadowColor = '#d8fff5'; ctx.fill(); ctx.shadowBlur = 0;
+      const pulse = Math.pow(.5 + .5 * Math.sin(p.phase), 3);
+      const alpha = .08 + p.a * pulse;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (0.8 + pulse * .55), 0, Math.PI * 2);
+      ctx.fillStyle = Math.random() > .5 ? `rgba(248,253,255,${alpha})` : `rgba(202,244,231,${alpha})`;
+      ctx.shadowBlur = 8 + pulse * 10; ctx.shadowColor = '#e3fff7'; ctx.fill(); ctx.shadowBlur = 0;
+      if (pulse > .82) {
+        ctx.strokeStyle = `rgba(232,255,248,${pulse * .55})`;
+        ctx.lineWidth = .7; ctx.beginPath(); ctx.moveTo(p.x - 5, p.y); ctx.lineTo(p.x + 5, p.y); ctx.moveTo(p.x, p.y - 5); ctx.lineTo(p.x, p.y + 5); ctx.stroke();
+      }
     }
     requestAnimationFrame(frame);
   }
@@ -677,6 +682,23 @@ CSS += """
   box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 18px 34px rgba(0,0,0,.32), 0 0 22px rgba(180,220,216,.12) !important;
 }
 .q-btn.tg-deploy .q-icon, .q-btn.tg-finish .q-icon { color: #c7dfdc !important; filter: drop-shadow(0 0 6px rgba(205,237,232,.35)) !important; }
+"""
+
+CSS += """
+/* Final layout pass */
+.tg-actions { display: flex !important; width: 100% !important; }
+.q-btn.tg-deploy, .q-btn.tg-finish {
+  width: 100% !important; min-height: 58px !important; justify-content: flex-start !important;
+  padding: 0 22px !important; border-radius: 13px !important;
+  background: rgba(218,235,232,.055) !important; border: 1px solid rgba(201,225,222,.28) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.13), 0 8px 18px rgba(0,0,0,.18) !important;
+}
+.q-btn.tg-deploy .q-btn__content, .q-btn.tg-finish .q-btn__content { justify-content: flex-start !important; gap: 12px !important; width: 100% !important; }
+.q-btn.tg-deploy .q-icon, .q-btn.tg-finish .q-icon { color: #d8e9e5 !important; filter: none !important; }
+.q-btn.tg-deploy:hover, .q-btn.tg-finish:hover { background: rgba(216,237,231,.12) !important; border-color: rgba(226,246,239,.58) !important; transform: translateX(4px) !important; box-shadow: 0 12px 24px rgba(0,0,0,.28), inset 3px 0 0 rgba(205,237,232,.68) !important; }
+.tg-card, .tg-hero, .tg-status { background: rgba(7,22,34,.28) !important; border-color: rgba(188,224,226,.15) !important; box-shadow: 0 22px 70px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.10) !important; }
+.tg-hero { background: rgba(13,38,51,.32) !important; }
+.tg-flow-item { background: rgba(12,34,45,.30) !important; }
 """
 
 # 复制函数：http 下 navigator.clipboard 不可用，必须用 execCommand 回退
@@ -1269,9 +1291,9 @@ def index():
                 '<div class="tg-flow-item"><span class="tg-flow-badge">3</span><span class="tg-flow-text">输入密码完成设置</span></div>'
                 '</div>', sanitize=False
             )
-            with ui.row().classes("w-full gap-2"):
-                ui.button("1. 部署必要软件", icon="rocket_launch", on_click=_auto_deploy).props("unelevated no-caps").classes("tg-deploy flex-1")
-                ui.button("2. 扫码后完成设置", icon="settings", on_click=_open_post_setup).props("unelevated no-caps").classes("tg-finish flex-1")
+            with ui.column().classes("tg-actions w-full gap-3"):
+                ui.button("1. 部署必要软件", icon="rocket_launch", on_click=_auto_deploy).props("unelevated no-caps").classes("tg-deploy w-full")
+                ui.button("2. 扫码后完成设置", icon="settings", on_click=_open_post_setup).props("unelevated no-caps").classes("tg-finish w-full")
             ui.html(
                 '<div class="tg-nat">'
                 '<strong>⚠ NAT 用户先看</strong>'
