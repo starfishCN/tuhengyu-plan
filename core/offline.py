@@ -11,10 +11,10 @@ UPLOAD_DIR = _PANEL_DIR / ".uploads"
 MAX_PACKAGE_BYTES = 30 * 1024 * 1024 * 1024
 ALLOWED_SUFFIXES = (".tar", ".tar.gz", ".tgz")
 IMAGE_OPTIONS = {
-    "SnowLuma": "motricseven7/snowluma:latest",
-    "AstrBot": "soulter/astrbot:latest",
+    "motricseven7/snowluma:latest": "SnowLuma",
+    "soulter/astrbot:latest": "AstrBot",
 }
-DEFAULT_IMAGE = IMAGE_OPTIONS["SnowLuma"]
+DEFAULT_IMAGE = "motricseven7/snowluma:latest"
 
 
 def safe_upload_name(name: str) -> str:
