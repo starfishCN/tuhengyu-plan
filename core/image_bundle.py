@@ -26,9 +26,11 @@ def image_prepare_cmds() -> list[str]:
         f"docker image inspect {ASTRBOT_IMAGE} >/dev/null 2>&1 && docker image inspect {SNOWLUMA_IMAGE} >/dev/null 2>&1 || "
         f"{{ found=0; for url in {urls}; do "
         f"echo '正在准备组件，请保持页面打开'; mkdir -p {bundle_dir}; "
-        f"if curl -fL --retry 2 --connect-timeout 15 --max-time 3600 \"$url\" -o {bundle} && "
-        f"test -s {bundle} && docker load -i {bundle}; then found=1; break; "
-        f"else echo \"镜像包地址失败，正在切换备用地址\"; fi; done; "
+        f"name=$(printf '%s' \"$url\" | sha256sum | cut -c1-12); "
+        f"target={bundle_dir}/bundle-$name.tar.gz; "
+        f"if curl -fL --retry 2 --connect-timeout 15 --max-time 3600 \"$url\" -o \"$target\" && "
+        f"test -s \"$target\" && gzip -t \"$target\" && gzip -dc \"$target\" | docker load; then found=1; "
+        f"else echo \"镜像包地址失败，正在切换下一个镜像包\"; fi; done; "
         f"if test \"$found\" != 1; then echo '维护者镜像包地址均不可用，继续使用自动镜像线路'; fi; }}",
         f"docker image inspect {ASTRBOT_IMAGE} >/dev/null 2>&1 || {{ echo 'AstrBot 镜像未就绪'; exit 21; }}",
         f"docker image inspect {SNOWLUMA_IMAGE} >/dev/null 2>&1 || {{ echo 'SnowLuma 镜像未就绪'; exit 22; }}",
