@@ -779,8 +779,16 @@ html body button.q-btn.tg-deploy::before,
 html body button.q-btn.tg-finish::before,
 html body button.q-btn.tg-utility::before,
 html body button.q-btn.tg-novnc-btn::before { background: transparent !important; }
+html body button.q-btn.tg-deploy,
+html body button.q-btn.tg-finish,
+html body button.q-btn.tg-utility,
+html body button.q-btn.tg-novnc-btn { min-height: 58px !important; border-radius: 13px !important; border: 1px solid rgba(197,210,194,.34) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 10px 22px rgba(0,0,0,.24) !important; transition: transform .2s ease, background-color .2s ease, border-color .2s ease, box-shadow .2s ease !important; }
+html body button.q-btn.tg-deploy:hover,
+html body button.q-btn.tg-finish:hover,
+html body button.q-btn.tg-utility:hover,
+html body button.q-btn.tg-novnc-btn:hover { transform: translateY(-2px) !important; border-color: rgba(220,235,225,.58) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.15), 0 14px 28px rgba(0,0,0,.3), 0 0 18px rgba(190,220,208,.10) !important; }
 /* Final geometry and palette lock */
-.tg-nat { display: grid !important; grid-template-columns: 112px minmax(0, 1fr) !important; gap: 18px !important; align-items: start !important; }
+.tg-nat { display: grid !important; box-sizing: border-box !important; width: 100% !important; max-width: none !important; grid-template-columns: 112px minmax(0, 1fr) !important; gap: 18px !important; align-items: start !important; }
 .tg-nat-label { display: block !important; line-height: 1.55 !important; }
 .tg-nat-copy { display: block !important; min-width: 0 !important; }
 .tg-nat-copy small { display: block !important; line-height: 1.55 !important; }
@@ -799,8 +807,8 @@ html body button.q-btn.tg-novnc-btn::before { background: transparent !important
   background: rgba(52,61,55,.84) !important; background-color: rgba(52,61,55,.84) !important;
   background-image: none !important; border-color: rgba(226,235,215,.66) !important;
 }
-.q-btn.tg-novnc-btn { background: rgba(45,51,39,.76) !important; background-color: rgba(45,51,39,.76) !important; border-color: rgba(220,207,151,.48) !important; }
-.q-btn.tg-novnc-btn:hover { background: rgba(67,72,48,.88) !important; background-color: rgba(67,72,48,.88) !important; }
+.q-btn.tg-novnc-btn { background: rgba(29,36,34,.72) !important; background-color: rgba(29,36,34,.72) !important; border-color: rgba(197,210,194,.34) !important; }
+.q-btn.tg-novnc-btn:hover { background: rgba(52,61,55,.84) !important; background-color: rgba(52,61,55,.84) !important; }
 .tg-main .q-linear-progress, .tg-main .tg-status, .tg-main .tg-hero { width: 100% !important; max-width: none !important; }
 .tg-main .q-field { width: 100% !important; max-width: none !important; }
 """
