@@ -751,15 +751,21 @@ CSS += """
 
 CSS += """
 /* Final geometry and palette lock */
+.tg-nat { display: grid !important; grid-template-columns: 112px minmax(0, 1fr) !important; gap: 18px !important; align-items: start !important; }
+.tg-nat-label { display: block !important; line-height: 1.55 !important; }
+.tg-nat-copy { display: block !important; min-width: 0 !important; }
+.tg-nat-copy small { display: block !important; line-height: 1.55 !important; }
 .tg-main > .q-card, .tg-main > .q-expansion, .tg-main > .q-card__section,
 .tg-main .q-expansion, .tg-main .q-expansion-item { width: 100% !important; max-width: none !important; }
 .tg-actions, .tg-novnc-actions, .tg-utility, .tg-port-input { width: 100% !important; max-width: none !important; }
+.q-btn.q-btn--unelevated.tg-deploy, .q-btn.q-btn--unelevated.tg-finish, .q-btn.q-btn--unelevated.tg-utility, .q-btn.q-btn--unelevated.tg-novnc-btn,
 .q-btn.tg-deploy, .q-btn.tg-finish, .q-btn.tg-utility, .q-btn.tg-novnc-btn {
   width: 100% !important; min-width: 0 !important; max-width: none !important;
   background: rgba(29,36,34,.72) !important; background-color: rgba(29,36,34,.72) !important;
   background-image: none !important; color: #e8eee8 !important;
   border-color: rgba(197,210,194,.34) !important;
 }
+.q-btn.q-btn--unelevated.tg-deploy::before, .q-btn.q-btn--unelevated.tg-finish::before, .q-btn.q-btn--unelevated.tg-utility::before, .q-btn.q-btn--unelevated.tg-novnc-btn::before { background: none !important; animation: none !important; }
 .q-btn.tg-deploy:hover, .q-btn.tg-finish:hover, .q-btn.tg-utility:hover, .q-btn.tg-novnc-btn:hover {
   background: rgba(52,61,55,.84) !important; background-color: rgba(52,61,55,.84) !important;
   background-image: none !important; border-color: rgba(226,235,215,.66) !important;
@@ -1300,8 +1306,8 @@ def credential_section():
     ui.label("打开 noVNC").classes("text-sm font-semibold mt-4 opacity-80")
     ui.html(
         '<div class="tg-nat">'
-        '<strong>端口提示</strong>'
-        '<span><small>独立公网服务器填 <b>6081</b>。</small>'
+        '<strong class="tg-nat-label">端口提示</strong>'
+        '<span class="tg-nat-copy"><small>独立公网服务器填 <b>6081</b>。</small>'
         '<small>NAT 服务器填服务商分配的外部端口，不要直接填内部端口 6081。</small>'
         '<small>如果服务商没有把外部端口映射到内部 6081，noVNC 无法打开。</small></span>'
         '</div>', sanitize=False
