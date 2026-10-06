@@ -750,6 +750,35 @@ CSS += """
 """
 
 CSS += """
+/* Absolute button color lock: override Quasar bg-primary/bg-secondary */
+html body button.q-btn.tg-deploy,
+html body button.q-btn.tg-finish,
+html body button.q-btn.tg-utility,
+html body button.q-btn.tg-novnc-btn,
+html body button.q-btn.bg-primary,
+html body button.q-btn.bg-secondary {
+  background: #252a28 !important;
+  background-color: #252a28 !important;
+  background-image: none !important;
+  --q-primary: #252a28 !important;
+  --q-secondary: #252a28 !important;
+  --q-color: #e8eee8 !important;
+  color: #e8eee8 !important;
+}
+html body button.q-btn.tg-deploy:hover,
+html body button.q-btn.tg-finish:hover,
+html body button.q-btn.tg-utility:hover,
+html body button.q-btn.tg-novnc-btn:hover,
+html body button.q-btn.bg-primary:hover,
+html body button.q-btn.bg-secondary:hover {
+  background: #3b403c !important;
+  background-color: #3b403c !important;
+  background-image: none !important;
+}
+html body button.q-btn.tg-deploy::before,
+html body button.q-btn.tg-finish::before,
+html body button.q-btn.tg-utility::before,
+html body button.q-btn.tg-novnc-btn::before { background: transparent !important; }
 /* Final geometry and palette lock */
 .tg-nat { display: grid !important; grid-template-columns: 112px minmax(0, 1fr) !important; gap: 18px !important; align-items: start !important; }
 .tg-nat-label { display: block !important; line-height: 1.55 !important; }
