@@ -784,78 +784,68 @@ async def _logout() -> None:
     await ui.run_javascript("window.location.href = '/logout';")
 
 
-@ui.page("/")
-def index():
-    global LOG
-    apply_style()
-
-    # 品牌栏
+def _brand_bar(admin: bool = False) -> None:
     with ui.row().classes("tg-brand w-full items-center gap-3 px-5 py-4 no-wrap"):
         ui.html(LOGO_SVG, sanitize=False)
         with ui.column().classes("gap-0"):
             ui.label("图恒宇计划").classes("tg-title")
-            ui.label("DEPLOY PANEL").classes("tg-sub")
+            ui.label("安装向导" if not admin else "管理工具").classes("tg-sub")
         ui.space()
-        ui.label("给 bot 完整的一生").classes("tg-sub tg-hide-sm")
-        ui.button(icon="contrast", on_click=ui.dark_mode().toggle).props(
-            "flat round dense"
-        ).tooltip("切换深浅色")
-        ui.button(icon="logout", on_click=_logout).props(
-            "flat round dense"
-        ).tooltip("退出登录")
+        if admin:
+            ui.link("返回安装页", "/").classes("text-sm")
+        ui.button(icon="logout", on_click=_logout).props("flat round dense").tooltip("退出登录")
 
-    # 主区
-    with ui.column().classes("tg-main w-full max-w-5xl mx-auto gap-4 p-4"):
+@ui.page("/")
+def index():
+    global LOG
+    apply_style()
+    LOG = ui.log(max_lines=4000).classes("hidden")
+    _brand_bar()
+    with ui.column().classes("tg-main w-full max-w-2xl mx-auto gap-4 p-4"):
+        with ui.card().classes("tg-card w-full"):
+            ui.label("安装机器人").classes("text-xl font-semibold")
+            ui.label("点击下面的按钮，面板会自动安装所需组件。无需电脑操作。页面保持打开，完成后按提示登录 QQ。")
+            ui.button("开始安装", icon="rocket_launch", on_click=_auto_deploy).props("color=primary size=lg").classes("w-full")
         with ui.card().classes("tg-card w-full"):
             with ui.row().classes("w-full items-center justify-between"):
-                ui.label("部署进度").classes("text-sm font-semibold opacity-70")
+                ui.label("安装状态").classes("text-sm font-semibold opacity-70")
                 with ui.row().classes("items-center gap-2"):
                     percent_label = ui.label("").classes("text-sm font-semibold tabular-nums")
-                    status_label = ui.label(DEPLOY_VIEW.get("status") or "尚未开始").classes("text-sm font-semibold")
-            stage_label = ui.label(DEPLOY_VIEW.get("stage") or "等待任务").classes("text-sm opacity-75")
+                    status_label = ui.label(DEPLOY_VIEW.get("status") or "等待开始").classes("text-sm font-semibold")
+            stage_label = ui.label(DEPLOY_VIEW.get("stage") or "点击“开始安装”后在此查看进度").classes("text-sm opacity-75")
             progress_bar = ui.linear_progress(value=DEPLOY_VIEW.get("progress") or 0).classes("w-full")
             DEPLOY_VIEW["percent_label"] = percent_label
-            if DEPLOY_VIEW.get("progress") is not None:
-                percent_label.text = f"{round(DEPLOY_VIEW['progress'] * 100)}%"
             DEPLOY_VIEW["status_label"] = status_label
             DEPLOY_VIEW["stage_label"] = stage_label
             DEPLOY_VIEW["progress_bar"] = progress_bar
             if DEPLOY_VIEW.get("progress") is None:
                 progress_bar.visible = False
-            with ui.row().classes("items-center gap-2"):
-                ui.icon("info").classes("opacity-60")
-                ui.label("开始任务后，这里会显示当前阶段、进度和最终结果。").classes("text-xs opacity-60")
-        with ui.card().classes("tg-card w-full"):
-            ui.label("新手入口").classes("text-sm font-semibold opacity-70")
-            ui.label("只点下面这一个按钮。面板会按正确顺序完成体检、Docker、换源和组件部署。失败时看日志最后一条。").classes("text-sm opacity-75")
-            ui.button("开始自动部署", icon="rocket_launch", on_click=_auto_deploy).props("color=primary size=lg").classes("tg-step w-full")
-            ui.label("预计需要较长时间。不要重复点击，也不要中途关闭页面。").classes("text-xs opacity-60")
+            else:
+                percent_label.text = f"{round(DEPLOY_VIEW['progress'] * 100)}%"
+        with ui.expansion("安装完成后：登录 QQ", icon="qr_code_scanner", value=False).classes("tg-card w-full"):
+            ui.label("先完成组件安装，再展开此处查看登录方式和初始凭据。")
+            credential_section()
+        ui.link("管理员工具", "/admin").classes("text-xs opacity-50")
 
-        with ui.expansion("高级模式：单独执行步骤", icon="build", value=False).classes("tg-card w-full"):
-            ui.label("只有自动部署失败、需要重试单个步骤时才使用这里。普通用户无需打开。").classes("text-xs opacity-60")
+@ui.page("/admin")
+def admin_page():
+    global LOG
+    apply_style()
+    _brand_bar(admin=True)
+    with ui.column().classes("tg-main w-full max-w-5xl mx-auto gap-4 p-4"):
+        with ui.expansion("单独重试安装步骤", icon="build", value=False).classes("tg-card w-full"):
             with ui.row().classes("gap-2 w-full"):
-                ui.button("环境体检", icon="health_and_safety", on_click=_handler("环境体检", CHECK_CMDS)).classes("tg-step")
+                ui.button("环境检查", icon="health_and_safety", on_click=_handler("环境检查", CHECK_CMDS)).classes("tg-step")
                 ui.button("安装 Docker", icon="inventory_2", on_click=_handler("安装 Docker", DOCKER_CMDS)).classes("tg-step")
                 ui.button("安装 SnowLuma", icon="chat", on_click=_dynamic_handler("安装 SnowLuma", lambda: snowluma_cmds(STATE["proxy"]["prefix"] if STATE["proxy"] else ""))).classes("tg-step")
                 ui.button("安装 AstrBot", icon="smart_toy", on_click=_handler("安装 AstrBot", ASTRBOT_CMDS)).classes("tg-step")
-                ui.button("装配套插件", icon="extension", on_click=_handler("装配套插件", PLUGIN_INSTALL_CMDS)).classes("tg-step")
-        with ui.expansion("网络源（测速 / 自动选优）", icon="tune", value=True).classes(
-            "tg-card w-full"
-        ):
+                ui.button("安装插件", icon="extension", on_click=_handler("装配套插件", PLUGIN_INSTALL_CMDS)).classes("tg-step")
+        with ui.expansion("镜像下载线路", icon="tune", value=False).classes("tg-card w-full"):
             source_section()
-
-        with ui.expansion("离线镜像包上传 / 导入", icon="upload_file", value=False).classes("tg-card w-full"):
+        with ui.expansion("管理员离线镜像导入", icon="upload_file", value=False).classes("tg-card w-full"):
             offline_image_section()
-
-        with ui.expansion("找不到密码？点这里读初始凭据", icon="key", value=False).classes(
-            "tg-card w-full"
-        ):
-            credential_section()
-
         with ui.card().classes("tg-card w-full"):
-            with ui.row().classes("items-center gap-2"):
-                ui.icon("terminal").classes("opacity-60")
-                ui.label("运行日志").classes("text-sm font-semibold opacity-70")
+            ui.label("运行日志").classes("text-sm font-semibold opacity-70")
             LOG = ui.log(max_lines=4000).classes("tg-log w-full h-80")
 
 
