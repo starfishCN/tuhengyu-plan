@@ -585,6 +585,7 @@ body {
 PARTICLE_JS = """
 <script>
 (function () {
+  if (!document.body) { setTimeout(arguments.callee, 50); return; }
   if (document.getElementById('tg-particles')) return;
   const canvas = document.createElement('canvas');
   canvas.id = 'tg-particles';
@@ -616,8 +617,8 @@ PARTICLE_JS = """
       if (p.y < -8) p.y = height + 8; if (p.y > height + 8) p.y = -8;
       const alpha = p.a * (.72 + Math.sin(p.phase) * .28);
       ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fillStyle = Math.random() > .45 ? `rgba(84,230,255,${alpha})` : `rgba(99,245,199,${alpha})`;
-      ctx.shadowBlur = 8; ctx.shadowColor = '#54e6ff'; ctx.fill(); ctx.shadowBlur = 0;
+      ctx.fillStyle = Math.random() > .5 ? `rgba(238,250,255,${alpha})` : `rgba(190,239,229,${alpha})`;
+      ctx.shadowBlur = 7; ctx.shadowColor = '#d8fff5'; ctx.fill(); ctx.shadowBlur = 0;
     }
     requestAnimationFrame(frame);
   }
@@ -656,6 +657,26 @@ CSS += """
 .q-btn.tg-deploy:active, .q-btn.tg-finish:active { transform: scale(.975) !important; }
 .q-btn.tg-deploy .q-icon { color: #54e6ff !important; filter: drop-shadow(0 0 8px rgba(84,230,255,.7)); }
 .q-btn.tg-finish .q-icon { color: #63f5c7 !important; filter: drop-shadow(0 0 8px rgba(99,245,199,.7)); }
+"""
+
+CSS += """
+/* Final cleanup: neutral glass controls and static connector */
+.tg-flow::before { background: linear-gradient(90deg, transparent, rgba(210,230,232,.55), rgba(99,245,199,.7), rgba(210,230,232,.55), transparent) !important; animation: none !important; box-shadow: 0 0 9px rgba(165,220,216,.25) !important; }
+.tg-flow::after { display: none !important; animation: none !important; }
+.tg-flow-badge, .tg-flow-item:nth-child(2) .tg-flow-badge, .tg-flow-item:nth-child(3) .tg-flow-badge {
+  background: rgba(34,52,60,.76) !important; border-color: rgba(198,232,232,.62) !important;
+  color: #e6f4f2 !important; box-shadow: 0 0 0 4px rgba(6,16,25,.88), 0 0 14px rgba(152,220,211,.18) !important;
+}
+.q-btn.tg-deploy, .q-btn.tg-finish {
+  color: #e5efef !important; background: rgba(27,40,46,.58) !important;
+  border: 1px solid rgba(189,215,216,.34) !important; border-left: 1px solid rgba(189,215,216,.34) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.15), inset 0 -14px 24px rgba(180,220,216,.035), 0 12px 26px rgba(0,0,0,.24) !important;
+}
+.q-btn.tg-deploy:hover, .q-btn.tg-finish:hover {
+  background: rgba(48,64,67,.72) !important; border-color: rgba(219,242,237,.68) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 18px 34px rgba(0,0,0,.32), 0 0 22px rgba(180,220,216,.12) !important;
+}
+.q-btn.tg-deploy .q-icon, .q-btn.tg-finish .q-icon { color: #c7dfdc !important; filter: drop-shadow(0 0 6px rgba(205,237,232,.35)) !important; }
 """
 
 # 复制函数：http 下 navigator.clipboard 不可用，必须用 execCommand 回退
