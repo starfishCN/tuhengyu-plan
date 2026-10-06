@@ -158,38 +158,73 @@ html:not(.tg-in) .tg-main > * {
   border: 1px solid rgba(148,163,184,.20) !important;
   box-shadow: 0 8px 28px rgba(0,0,0,.10) !important;
 }
-.tg-hero {
-  padding: 1.25rem !important;
-  background:
-    linear-gradient(135deg, rgba(34,211,238,.12), rgba(129,140,248,.08) 55%, rgba(15,23,42,.18)),
-    rgba(15,23,42,.42) !important;
-  border-color: rgba(34,211,238,.28) !important;
+.tg-status {
+  background: rgba(255,255,255,.9) !important;
+  border-color: rgba(15,23,42,.08) !important;
 }
+.tg-status .q-linear-progress {
+  height: 8px !important; border-radius: 999px !important;
+  background: #e2e8f0 !important; overflow: hidden;
+}
+.tg-status .q-linear-progress__model {
+  border-radius: 999px !important;
+  background: linear-gradient(90deg, #0ea5e9, #22c55e) !important;
+  transition: width .45s cubic-bezier(.22,1,.36,1) !important;
+}
+.body--dark .tg-status { background: rgba(15,23,42,.82) !important; }
+.body--dark .tg-status .q-linear-progress { background: rgba(148,163,184,.22) !important; }
+.tg-status-percent { color: #0284c7; font-variant-numeric: tabular-nums; }
+/* 首页主视觉 */
+.tg-hero {
+  position: relative; overflow: hidden;
+  padding: 1.6rem !important;
+  background: rgba(255,255,255,.88) !important;
+  border-color: rgba(15,23,42,.09) !important;
+  box-shadow: 0 18px 50px rgba(15,23,42,.10) !important;
+}
+.tg-hero::after {
+  content: ""; position: absolute; width: 280px; height: 280px; right: -110px; top: -150px;
+  border-radius: 50%; background: rgba(56,189,248,.14); filter: blur(3px);
+  animation: tg-orbit 9s ease-in-out infinite alternate;
+}
+@keyframes tg-orbit { to { transform: translate(-35px, 28px) scale(1.12); opacity: .55; } }
 .tg-kicker {
-  color: #67e8f9; font-size: .72rem; font-weight: 700;
-  letter-spacing: .14em; text-transform: uppercase;
+  color: #0284c7; font-size: .72rem; font-weight: 800;
+  letter-spacing: .13em; text-transform: uppercase;
 }
 .tg-flow {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px; margin: 14px 0 18px;
+  gap: 10px; margin: 18px 0 20px;
 }
 .tg-flow-item {
-  padding: 10px 11px; border-radius: 10px;
-  background: rgba(15,23,42,.42); border: 1px solid rgba(148,163,184,.18);
+  position: relative; min-height: 70px; padding: 13px 14px; border-radius: 12px;
+  background: #f8fafc; border: 1px solid #e2e8f0;
+  transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease;
 }
-.tg-flow-num { color: #67e8f9; font: 700 .72rem ui-monospace, monospace; }
-.tg-flow-text { display: block; margin-top: 4px; font-size: .82rem; line-height: 1.4; }
+.tg-flow-item:hover {
+  transform: translateY(-3px); border-color: #7dd3fc;
+  box-shadow: 0 8px 20px rgba(14,165,233,.12);
+}
+.tg-flow-item::before {
+  content: ""; display: block; width: 7px; height: 7px; margin-bottom: 12px;
+  border-radius: 50%; background: #0ea5e9; box-shadow: 0 0 0 4px #e0f2fe;
+}
+.tg-flow-text { display: block; color: #0f172a; font-size: .84rem; font-weight: 650; line-height: 1.4; }
 .tg-nat {
   display: flex; gap: 10px; align-items: flex-start;
-  margin: 12px 0; padding: 11px 12px; border-radius: 10px;
-  color: #fef3c7; background: rgba(245,158,11,.12);
-  border: 1px solid rgba(245,158,11,.34); line-height: 1.55;
+  margin: 14px 0 0; padding: 12px 13px; border-radius: 11px;
+  color: #78350f; background: #fffbeb;
+  border: 1px solid #fcd34d; line-height: 1.55;
 }
-.tg-nat strong { color: #fbbf24; white-space: nowrap; }
-.tg-nat small { display: block; opacity: .86; }
+.tg-nat strong { color: #b45309; white-space: nowrap; }
+.tg-nat small { display: block; opacity: .9; }
+.body--dark .tg-hero { background: rgba(15,23,42,.82) !important; border-color: rgba(148,163,184,.2) !important; }
+.body--dark .tg-flow-item { background: rgba(30,41,59,.72); border-color: rgba(148,163,184,.22); }
+.body--dark .tg-flow-text { color: #e2e8f0; }
 @media (max-width: 640px) {
-  .tg-flow { grid-template-columns: 1fr; gap: 6px; }
-  .tg-flow-item { padding: 8px 10px; }
+  .tg-flow { grid-template-columns: 1fr; gap: 7px; }
+  .tg-flow-item { min-height: 0; padding: 10px 12px; }
+  .tg-flow-item::before { display: inline-block; margin: 0 8px 1px 0; }
   .tg-nat { display: block; }
   .tg-nat strong { display: block; margin-bottom: 3px; }
 }
@@ -905,9 +940,9 @@ def index():
             ui.label("按顺序完成下面三步。面板会处理安装、连接和配置。你只需要扫码，并输入当前 AstrBot 密码。").classes("text-sm opacity-75 mt-1")
             ui.html(
                 '<div class="tg-flow">'
-                '<div class="tg-flow-item"><span class="tg-flow-num">01</span><span class="tg-flow-text">部署必要软件</span></div>'
-                '<div class="tg-flow-item"><span class="tg-flow-num">02</span><span class="tg-flow-text">noVNC 扫码登录 QQ</span></div>'
-                '<div class="tg-flow-item"><span class="tg-flow-num">03</span><span class="tg-flow-text">输入密码完成设置</span></div>'
+                '<div class="tg-flow-item"><span class="tg-flow-text">部署必要软件</span></div>'
+                '<div class="tg-flow-item"><span class="tg-flow-text">noVNC 扫码登录 QQ</span></div>'
+                '<div class="tg-flow-item"><span class="tg-flow-text">输入密码完成设置</span></div>'
                 '</div>', sanitize=False
             )
             with ui.row().classes("w-full gap-2"):
@@ -920,14 +955,14 @@ def index():
                 '<small>noVNC 默认填 <b>6081</b> 仅适用于独立公网服务器；NAT 请填映射到内部 <b>6081</b> 的外部端口。</small></span>'
                 '</div>', sanitize=False
             )
-        with ui.card().classes("tg-card w-full"):
+        with ui.card().classes("tg-card tg-status w-full"):
             with ui.row().classes("w-full items-center justify-between"):
                 ui.label("安装状态").classes("text-sm font-semibold opacity-70")
                 with ui.row().classes("items-center gap-2"):
-                    percent_label = ui.label("").classes("text-sm font-semibold tabular-nums")
                     status_label = ui.label(DEPLOY_VIEW.get("status") or "等待开始").classes("text-sm font-semibold")
-            stage_label = ui.label(DEPLOY_VIEW.get("stage") or "点击“开始安装”后在此查看进度").classes("text-sm opacity-75")
-            progress_bar = ui.linear_progress(value=DEPLOY_VIEW.get("progress") or 0).classes("w-full")
+                    percent_label = ui.label("").classes("tg-status-percent text-sm font-bold")
+            stage_label = ui.label(DEPLOY_VIEW.get("stage") or "点击上方按钮开始").classes("text-sm opacity-75 mt-2")
+            progress_bar = ui.linear_progress(value=DEPLOY_VIEW.get("progress") or 0).classes("w-full mt-3")
             DEPLOY_VIEW["percent_label"] = percent_label
             DEPLOY_VIEW["status_label"] = status_label
             DEPLOY_VIEW["stage_label"] = stage_label
