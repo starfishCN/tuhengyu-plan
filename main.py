@@ -394,8 +394,8 @@ def _diagnose_failure(output: list[str], fallback: str) -> tuple[str, str, str]:
     else:
         reason = fallback
         solution = "查看日志中首个报错及其前后内容；当前特征未匹配到已知故障类型。"
-    error_lines = [line.strip() for line in output if line.strip() and ("error" in line.lower() or "failed" in line.lower() or "失败" in line or "denied" in line.lower() or "timeout" in line.lower())]
-    detail = error_lines[-1] if error_lines else (output[-1].strip() if output else "无命令输出")
+    error_lines = [line.strip() for line in output if line.strip() and ("error" in line.lower() or "failed" in line.lower() or "失败" in line or "denied" in line.lower() or "timeout" in line.lower() or "timed out" in line.lower() or "not found" in line.lower() or "refused" in line.lower())]
+    detail = error_lines[-1] if error_lines else (output[-2].strip() if len(output) > 1 else (output[-1].strip() if output else "无命令输出"))
     return reason, solution, detail[:500]
 
 def _set_task(status: str, stage: str = "", progress: float | None = None) -> None:
@@ -688,10 +688,12 @@ def _port_table_html() -> str:
 
 def offline_image_section():
     ui.markdown(
-        "网络线路无法下载镜像分层时，可先在可联网的 Docker 电脑执行 "
-        "`docker save -o snowluma.tar motricseven7/snowluma:latest`，"
-        "再把 tar 包传到这里。上传仅保存到面板私有目录；点击导入后会运行 `docker load` 并检查镜像标签。"
+        "网络线路无法下载镜像分层时，在可联网的 Docker 电脑执行对应命令导出镜像：\n\n"
+        "SnowLuma：`docker save -o snowluma.tar motricseven7/snowluma:latest`\n\n"
+        "AstrBot：`docker save -o astrbot.tar soulter/astrbot:latest`\n\n"
+        "把 tar 包上传后，选择对应镜像再点击导入。导入成功后重新点击自动部署。"
     )
+    image_choice = ui.select(offline.IMAGE_OPTIONS, value=offline.DEFAULT_IMAGE, label="要导入的镜像").classes("w-full max-w-md")
     status = ui.column().classes("w-full")
     packages = ui.column().classes("w-full")
 
@@ -708,7 +710,7 @@ def offline_image_section():
                     async def import_package(path=package):
                         if not _guard():
                             return
-                        await _run(f"导入离线镜像：{path.name}", offline.import_cmds(path))
+                        await _run(f"导入离线镜像：{path.name}", offline.import_cmds(path, image_choice.value))
                     ui.button("导入并检查", icon="inventory_2", on_click=import_package).classes("tg-step")
 
     async def receive_upload(event):
