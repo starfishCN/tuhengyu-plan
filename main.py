@@ -433,10 +433,20 @@ body::after { content: ""; position: fixed; z-index: -1; left: 0; right: 0; top:
 .tg-flow-text { color: #dcecf5 !important; font-size: .88rem; }
 .tg-nat { color: #ffe8a3 !important; background: rgba(104,74,18,.18) !important; border-color: rgba(255,200,87,.35) !important; }
 .tg-nat strong { color: var(--amber) !important; }
-.tg-cta { min-height: 72px !important; border-radius: 15px !important; border-color: rgba(255,255,255,.24) !important; box-shadow: 0 14px 28px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.32) !important; }
-.tg-cta-primary { background: linear-gradient(120deg,#097eae,#3264e8 52%,#584bd2) !important; }
-.tg-cta-secondary { background: linear-gradient(120deg,#087d86,#159e9b 52%,#3f8dce) !important; }
-.tg-cta:hover { box-shadow: 0 22px 42px rgba(0,0,0,.34), 0 0 0 1px rgba(84,230,255,.55), 0 0 30px rgba(84,230,255,.16) !important; }
+.tg-cta {
+  min-height: 72px !important; border-radius: 15px !important;
+  color: #dffaff !important;
+  border: 1px solid rgba(112,226,224,.32) !important;
+  background: linear-gradient(180deg, rgba(22,48,61,.96), rgba(10,27,40,.98)) !important;
+  box-shadow: 0 14px 28px rgba(0,0,0,.28), inset 0 1px 0 rgba(184,255,249,.12), inset 0 0 22px rgba(55,210,196,.05) !important;
+}
+.tg-cta-primary { border-color: rgba(84,230,255,.48) !important; }
+.tg-cta-secondary { border-color: rgba(99,245,199,.42) !important; }
+.tg-cta::before { background: linear-gradient(105deg, transparent 30%, rgba(188,255,247,.18) 48%, transparent 67%) !important; }
+.tg-cta:hover {
+  background: linear-gradient(180deg, rgba(28,63,76,.98), rgba(11,35,46,.99)) !important;
+  box-shadow: 0 22px 42px rgba(0,0,0,.38), 0 0 0 1px rgba(112,226,224,.52), 0 0 30px rgba(75,224,201,.13), inset 0 1px 0 rgba(184,255,249,.2) !important;
+}
 .tg-status { background: rgba(5,16,28,.70) !important; border-color: rgba(99,245,199,.18) !important; }
 .tg-status .q-linear-progress { height: 10px !important; background: rgba(141,165,184,.14) !important; box-shadow: inset 0 1px 4px rgba(0,0,0,.32); }
 .tg-status .q-linear-progress__model { background: linear-gradient(90deg,var(--cyan),var(--mint)) !important; box-shadow: 0 0 18px rgba(84,230,255,.65); }
