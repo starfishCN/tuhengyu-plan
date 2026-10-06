@@ -11,6 +11,12 @@
 from .plugin import PLUGIN_STAGE_CMDS
 ASTRBOT_IMAGE = "soulter/astrbot:latest"
 ASTRBOT_NETWORK = "maim_bot"
+TOKEN_CMD = (
+    "umask 077; test -s data/.tuhengyu_ws_token || "
+    "(openssl rand -hex 24 || head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 48) "
+    "> data/.tuhengyu_ws_token; chmod 600 data/.tuhengyu_ws_token"
+)
+# 拉镜像：
 # 拉镜像：先直连，失败走 DaoCloud 前缀再重打标签（无国际出口机器用；
 # 若面板已配 daemon.json 镜像加速，第一跳即可成功）。
 PULL_CMDS = [
@@ -20,6 +26,7 @@ PULL_CMDS = [
     f"docker tag m.daocloud.io/docker.io/{ASTRBOT_IMAGE} {ASTRBOT_IMAGE}))",
 ]
 ASTRBOT_CMDS = PLUGIN_STAGE_CMDS + PULL_CMDS + [
+    TOKEN_CMD,
     f"docker network inspect {ASTRBOT_NETWORK} >/dev/null 2>&1 || docker network create {ASTRBOT_NETWORK}",
     "docker rm -f astrbot >/dev/null 2>&1 || true",
     (
