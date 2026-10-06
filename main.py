@@ -582,6 +582,82 @@ body {
 }
 """
 
+PARTICLE_JS = """
+<script>
+(function () {
+  if (document.getElementById('tg-particles')) return;
+  const canvas = document.createElement('canvas');
+  canvas.id = 'tg-particles';
+  canvas.setAttribute('aria-hidden', 'true');
+  document.body.prepend(canvas);
+  const ctx = canvas.getContext('2d');
+  const dots = [];
+  let width = 0, height = 0, dpr = 1;
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    width = window.innerWidth; height = window.innerHeight;
+    canvas.width = width * dpr; canvas.height = height * dpr;
+    canvas.style.width = width + 'px'; canvas.style.height = height + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    dots.length = 0;
+    const count = Math.min(95, Math.max(42, Math.floor(width * height / 15000)));
+    for (let i = 0; i < count; i++) dots.push({
+      x: Math.random() * width, y: Math.random() * height,
+      vx: (Math.random() - .5) * .18, vy: (Math.random() - .5) * .16,
+      r: Math.random() * 1.5 + .35, a: Math.random() * .55 + .2,
+      phase: Math.random() * Math.PI * 2
+    });
+  }
+  function frame(t) {
+    ctx.clearRect(0, 0, width, height);
+    for (const p of dots) {
+      p.x += p.vx; p.y += p.vy; p.phase += .018;
+      if (p.x < -8) p.x = width + 8; if (p.x > width + 8) p.x = -8;
+      if (p.y < -8) p.y = height + 8; if (p.y > height + 8) p.y = -8;
+      const alpha = p.a * (.72 + Math.sin(p.phase) * .28);
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = Math.random() > .45 ? `rgba(84,230,255,${alpha})` : `rgba(99,245,199,${alpha})`;
+      ctx.shadowBlur = 8; ctx.shadowColor = '#54e6ff'; ctx.fill(); ctx.shadowBlur = 0;
+    }
+    requestAnimationFrame(frame);
+  }
+  window.addEventListener('resize', resize, { passive: true });
+  resize(); requestAnimationFrame(frame);
+})();
+</script>
+"""
+
+CSS += """
+#tg-particles { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .72; }
+.tg-brand, .tg-main { position: relative; z-index: 1; }
+.q-btn.tg-deploy, .q-btn.tg-finish {
+  position: relative !important; isolation: isolate !important; overflow: hidden !important;
+  min-height: 68px !important; border-radius: 15px !important;
+  color: #e7ffff !important; background: rgba(8,25,38,.62) !important;
+  border: 1px solid rgba(148,226,232,.35) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.16), inset 0 -16px 28px rgba(84,230,255,.045), 0 14px 28px rgba(0,0,0,.26) !important;
+  backdrop-filter: blur(20px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
+  transition: transform .25s ease, background .25s ease, border-color .25s ease, box-shadow .25s ease !important;
+}
+.q-btn.tg-deploy { border-left: 3px solid #54e6ff !important; }
+.q-btn.tg-finish { border-left: 3px solid #63f5c7 !important; }
+.q-btn.tg-deploy::before, .q-btn.tg-finish::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(105deg, transparent 18%, rgba(220,255,255,.25) 48%, transparent 72%);
+  transform: translateX(-125%); transition: transform .8s cubic-bezier(.16,1,.3,1);
+}
+.q-btn.tg-deploy:hover, .q-btn.tg-finish:hover {
+  transform: translateY(-4px) !important; background: rgba(22,61,72,.72) !important;
+  border-color: rgba(190,255,250,.72) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 20px 38px rgba(0,0,0,.38), 0 0 28px rgba(84,230,255,.16) !important;
+}
+.q-btn.tg-deploy:hover::before, .q-btn.tg-finish:hover::before { transform: translateX(125%); }
+.q-btn.tg-deploy:active, .q-btn.tg-finish:active { transform: scale(.975) !important; }
+.q-btn.tg-deploy .q-icon { color: #54e6ff !important; filter: drop-shadow(0 0 8px rgba(84,230,255,.7)); }
+.q-btn.tg-finish .q-icon { color: #63f5c7 !important; filter: drop-shadow(0 0 8px rgba(99,245,199,.7)); }
+"""
+
 # 复制函数：http 下 navigator.clipboard 不可用，必须用 execCommand 回退
 COPY_JS = """
 <script>
@@ -658,6 +734,7 @@ ENTER_JS = """
 
 def apply_style() -> None:
     ui.add_head_html(f"<style>{CSS}</style>")
+    ui.add_head_html(PARTICLE_JS)
     ui.add_head_html(COPY_JS)
     ui.add_head_html(ENTER_JS)
 
@@ -1172,8 +1249,8 @@ def index():
                 '</div>', sanitize=False
             )
             with ui.row().classes("w-full gap-2"):
-                ui.button("1. 部署必要软件", icon="rocket_launch", on_click=_auto_deploy).props("unelevated size=lg").classes("tg-cta tg-cta-primary flex-1")
-                ui.button("2. 扫码后完成设置", icon="settings", on_click=_open_post_setup).props("unelevated size=lg").classes("tg-cta tg-cta-secondary flex-1")
+                ui.button("1. 部署必要软件", icon="rocket_launch", on_click=_auto_deploy).props("unelevated no-caps").classes("tg-deploy flex-1")
+                ui.button("2. 扫码后完成设置", icon="settings", on_click=_open_post_setup).props("unelevated no-caps").classes("tg-finish flex-1")
             ui.html(
                 '<div class="tg-nat">'
                 '<strong>⚠ NAT 用户先看</strong>'
