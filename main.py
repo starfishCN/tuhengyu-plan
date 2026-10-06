@@ -642,16 +642,18 @@ def source_section():
 def _cred_table_html(rows: list) -> str:
     out = [
         '<div class="tg-wrap"><table class="tg-table"><thead><tr>',
-        "<th>服务</th><th>端口</th><th>初始密码</th><th></th>",
+        "<th>服务</th><th>用户名</th><th>端口</th><th>初始密码</th><th></th>",
         "</tr></thead><tbody>",
     ]
     for r in rows:
         name = _html.escape(r["name"])
+        username = _html.escape(r.get("username", "")) or "—"
         if r["ok"]:
             pw = _html.escape(r["value"])
             quoted = json.dumps(r["value"])  # 安全地嵌入 onclick
             out.append(
                 f"<tr><td>{name}</td>"
+                f"<td>{username}</td>"
                 f'<td class="tg-port">{r["port"]}</td>'
                 f'<td class="tg-pw">{pw}</td>'
                 f'<td><button class="tg-copy" '
@@ -660,6 +662,7 @@ def _cred_table_html(rows: list) -> str:
         else:
             out.append(
                 f"<tr><td>{name}</td>"
+                f"<td>{username}</td>"
                 f'<td class="tg-port">{r["port"]}</td>'
                 f'<td class="tg-none">没读到</td><td></td></tr>'
             )

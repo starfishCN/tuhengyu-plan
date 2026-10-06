@@ -61,6 +61,15 @@ async def gather() -> list:
     for key, name, port, cmd, note in PROBES:
         code, raw = await run_capture(cmd)
         value = raw.strip().splitlines()[-1].strip() if raw.strip() else ""
+        username = ""
+        if key == "astrbot":
+            _, user_raw = await run_capture(
+                "docker exec astrbot awk -F '\"' '/username/ {print $4; exit}' "
+                "/AstrBot/data/cmd_config.json 2>/dev/null"
+            )
+            username = user_raw.strip().splitlines()[-1].strip() if user_raw.strip() else ""
+        elif key == "snowluma":
+            username = "admin"
         out.append(
             {
                 "key": key,
@@ -68,6 +77,7 @@ async def gather() -> list:
                 "port": port,
                 "ok": bool(value),
                 "value": value,
+                "username": username,
                 "note": note,
             }
         )
