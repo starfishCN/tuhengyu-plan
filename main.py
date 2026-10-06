@@ -778,7 +778,19 @@ html body button.q-btn.bg-secondary:hover {
 html body button.q-btn.tg-deploy::before,
 html body button.q-btn.tg-finish::before,
 html body button.q-btn.tg-utility::before,
-html body button.q-btn.tg-novnc-btn::before { background: transparent !important; }
+html body button.q-btn.tg-novnc-btn::before,
+html body button.q-btn.tg-deploy::after,
+html body button.q-btn.tg-finish::after,
+html body button.q-btn.tg-utility::after,
+html body button.q-btn.tg-novnc-btn::after { background: transparent !important; opacity: 0 !important; box-shadow: none !important; }
+html body button.q-btn.tg-deploy,
+html body button.q-btn.tg-finish,
+html body button.q-btn.tg-utility,
+html body button.q-btn.tg-novnc-btn { background: linear-gradient(180deg, #303735 0%, #202624 100%) !important; background-color: #252a28 !important; color: #e8eee8 !important; border: 1px solid rgba(197,210,194,.34) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.12), inset 0 -1px 0 rgba(0,0,0,.34), 0 10px 22px rgba(0,0,0,.24) !important; }
+html body button.q-btn.tg-deploy:hover,
+html body button.q-btn.tg-finish:hover,
+html body button.q-btn.tg-utility:hover,
+html body button.q-btn.tg-novnc-btn:hover { background: linear-gradient(180deg, #3a423e 0%, #292f2c 100%) !important; background-color: #303733 !important; }
 html body button.q-btn.tg-deploy,
 html body button.q-btn.tg-finish,
 html body button.q-btn.tg-utility,
@@ -789,6 +801,7 @@ html body button.q-btn.tg-utility:hover,
 html body button.q-btn.tg-novnc-btn:hover { transform: translateY(-2px) !important; border-color: rgba(220,235,225,.58) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.15), 0 14px 28px rgba(0,0,0,.3), 0 0 18px rgba(190,220,208,.10) !important; }
 /* Final geometry and palette lock */
 .tg-nat { display: grid !important; box-sizing: border-box !important; width: 100% !important; max-width: none !important; grid-template-columns: 112px minmax(0, 1fr) !important; gap: 18px !important; align-items: start !important; }
+.tg-nat-wrap { display: block !important; width: 100% !important; max-width: none !important; min-width: 0 !important; align-self: stretch !important; }
 .tg-nat-label { display: block !important; line-height: 1.55 !important; }
 .tg-nat-copy { display: block !important; min-width: 0 !important; }
 .tg-nat-copy small { display: block !important; line-height: 1.55 !important; }
@@ -1348,8 +1361,9 @@ def credential_section():
         '<small>NAT 服务器填服务商分配的外部端口，不要直接填内部端口 6081。</small>'
         '<small>如果服务商没有把外部端口映射到内部 6081，noVNC 无法打开。</small></span>'
         '</div>', sanitize=False
-    )
+    ).classes("tg-nat-wrap w-full")
     with ui.column().classes("tg-novnc-actions w-full gap-2"):
+
         novnc_port = ui.input("noVNC 外部端口", value="6081").props("type=number min=1 max=65535 outlined").classes("tg-port-input w-full")
         async def open_novnc():
             try:
