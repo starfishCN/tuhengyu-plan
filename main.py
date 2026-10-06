@@ -507,7 +507,82 @@ CSS += """
 }
 """
 
-# 复制函数：http 下 navigator.clipboard 不可用，必须回退到 execCommand
+# 最终材质覆盖：液态玻璃、粒子背景、统一按钮系统。
+CSS += """
+/* ---------- Liquid glass + particle field ---------- */
+html, body { background-color: #040a12 !important; }
+body {
+  background-image:
+    radial-gradient(circle at 12% 18%, rgba(84,230,255,.72) 0 1px, transparent 2px),
+    radial-gradient(circle at 28% 72%, rgba(99,245,199,.58) 0 1px, transparent 2px),
+    radial-gradient(circle at 48% 34%, rgba(180,220,255,.52) 0 1px, transparent 2px),
+    radial-gradient(circle at 67% 82%, rgba(84,230,255,.65) 0 1px, transparent 2px),
+    radial-gradient(circle at 86% 26%, rgba(99,245,199,.6) 0 1px, transparent 2px),
+    radial-gradient(circle at 76% 58%, rgba(180,220,255,.4) 0 1px, transparent 2px),
+    linear-gradient(rgba(84,230,255,.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(84,230,255,.028) 1px, transparent 1px),
+    radial-gradient(ellipse at 20% 0%, rgba(0,173,255,.18), transparent 43%),
+    radial-gradient(ellipse at 90% 20%, rgba(99,245,199,.08), transparent 34%),
+    linear-gradient(135deg, #040a12, #071421 55%, #06101a) !important;
+  background-size: 260px 220px, 330px 280px, 410px 320px, 290px 250px, 370px 300px, 500px 380px, 42px 42px, 42px 42px, auto, auto, auto !important;
+  animation: tg-particles 18s linear infinite !important;
+}
+@keyframes tg-particles {
+  0% { background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0; }
+  50% { background-position: 32px -24px, -26px 30px, 22px 18px, -18px -28px, 28px 20px, -30px 16px, 0 18px, 18px 0; }
+  100% { background-position: 64px -48px, -52px 60px, 44px 36px, -36px -56px, 56px 40px, -60px 32px, 0 36px, 36px 0; }
+}
+.tg-card, .tg-hero, .tg-status {
+  background: linear-gradient(135deg, rgba(20,43,58,.48), rgba(7,20,32,.34)) !important;
+  border: 1px solid rgba(182,235,246,.17) !important;
+  box-shadow: 0 25px 80px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.13), inset 0 -1px 0 rgba(84,230,255,.08) !important;
+  backdrop-filter: blur(24px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(145%) !important;
+}
+.tg-hero { background: linear-gradient(135deg, rgba(27,65,82,.52), rgba(7,22,36,.30)) !important; }
+.tg-flow-item {
+  background: linear-gradient(135deg, rgba(21,53,67,.42), rgba(5,19,31,.27)) !important;
+  border-color: rgba(170,226,239,.18) !important;
+  backdrop-filter: blur(18px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(150%) !important;
+}
+/* ---------- Unified button system ---------- */
+.q-btn.tg-cta, .q-btn.tg-step {
+  isolation: isolate !important; overflow: hidden !important;
+  min-height: 62px !important; border-radius: 16px !important;
+  color: #dffcff !important; background: rgba(15,39,52,.46) !important;
+  border: 1px solid rgba(156,229,236,.34) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.18), inset 0 -10px 22px rgba(84,230,255,.035), 0 12px 28px rgba(0,0,0,.22) !important;
+  backdrop-filter: blur(18px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(160%) !important;
+  transition: transform .28s cubic-bezier(.22,1,.36,1), border-color .28s ease, box-shadow .28s ease, background .28s ease !important;
+}
+.q-btn.tg-cta::before, .q-btn.tg-step::before {
+  content: "" !important; position: absolute !important; inset: -2px !important; z-index: -1 !important;
+  background: linear-gradient(110deg, transparent 22%, rgba(222,255,255,.34) 47%, transparent 70%) !important;
+  transform: translateX(-130%) !important; transition: transform .9s cubic-bezier(.16,1,.3,1) !important;
+}
+.q-btn.tg-cta::after, .q-btn.tg-step::after {
+  content: "" !important; position: absolute !important; inset: 1px !important; z-index: -1 !important;
+  border-radius: 15px !important; border: 1px solid rgba(255,255,255,.08) !important; pointer-events: none !important;
+}
+.q-btn.tg-cta-primary { border-left: 2px solid #54e6ff !important; }
+.q-btn.tg-cta-secondary { border-left: 2px solid #63f5c7 !important; }
+.q-btn.tg-cta:hover, .q-btn.tg-step:hover {
+  transform: translateY(-4px) !important;
+  background: rgba(31,76,88,.58) !important;
+  border-color: rgba(178,250,248,.72) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.24), inset 0 -12px 25px rgba(84,230,255,.07), 0 20px 38px rgba(0,0,0,.32), 0 0 24px rgba(99,245,199,.12) !important;
+}
+.q-btn.tg-cta:hover::before, .q-btn.tg-step:hover::before { transform: translateX(130%) !important; }
+.q-btn.tg-cta:active, .q-btn.tg-step:active { transform: translateY(0) scale(.975) !important; }
+.q-btn.tg-cta .q-icon, .q-btn.tg-step .q-icon { color: #8ff8f1 !important; filter: drop-shadow(0 0 7px rgba(99,245,199,.42)); }
+@media (max-width: 640px) {
+  .q-btn.tg-cta, .q-btn.tg-step { min-height: 58px !important; }
+}
+"""
+
+# 复制函数：http 下 navigator.clipboard 不可用，必须用 execCommand 回退
 COPY_JS = """
 <script>
 function tgCopy(btn, text) {
