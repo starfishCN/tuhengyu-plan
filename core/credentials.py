@@ -28,11 +28,15 @@ PROBES = [
         "astrbot",
         "AstrBot 控制台",
         6185,
-        "value=$(docker exec astrbot awk -F '\"' '/password/ {print $4; exit}' /AstrBot/data/cmd_config.json 2>/dev/null); "
+        "value=$(docker exec astrbot sh -c 'cat /AstrBot/data/.tuhengyu_astrbot_password 2>/dev/null' "
+        "| tr -d '\\r' | tail -n 1); "
+        "if test -n \"$value\"; then printf '%s\\n' \"$value\"; else "
+        "value=$(docker exec astrbot awk -F '\"' '/password/ {print $4; exit}' "
+        "/AstrBot/data/cmd_config.json 2>/dev/null); "
         "if test -n \"$value\"; then printf '%s\\n' \"$value\"; else "
         "docker logs astrbot 2>&1 | grep -E 'Initial password' | tail -n 1 "
-        "| sed -E 's/.*Initial password: *//' | tr -d '\\r'; fi",
-        "优先读取配置中的初始密码；旧版本回退启动日志。改密后此处可能是旧值",
+        "| sed -E 's/.*Initial password: *//' | tr -d '\\r'; fi; fi",
+        "优先读取图恒宇保存的当前初始密码；旧部署回退配置或启动日志",
     ),
     (
         "snowluma",
