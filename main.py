@@ -27,6 +27,7 @@ from core.check import CHECK_CMDS
 from core.docker import DOCKER_CMDS, apply_mirror_cmds
 from core.snowluma import snowluma_cmds
 from core.astrbot import ASTRBOT_CMDS
+from core.image_bundle import image_prepare_cmds, bundle_configured
 from core import sources
 from core import credentials
 from core.plugin import PLUGIN_INSTALL_CMDS
@@ -482,17 +483,17 @@ async def _auto_deploy():
     if not _guard():
         return
     LOG.push("===== 一键自动部署开始 =====")
-    # 六个阶段的顺序固定，进度按阶段编号更新。
+    # 七个阶段的顺序固定，进度按阶段编号更新。
     try:
         for index, (title, cmds) in enumerate((("环境体检", CHECK_CMDS), ("安装 Docker", DOCKER_CMDS)), start=1):
-            _set_task("正在执行", f"阶段 {index}/6：{title}", (index - 1) / 6)
+            _set_task("正在执行", f"阶段 {index}/7：{title}", (index - 1) / 7)
             LOG.push(f"--- {title} ---")
             code, output = await _run_tracked(cmds)
             if code != 0:
                 _show_failure(title, output, f"命令执行失败，退出码 {code}")
                 return
 
-        _set_task("正在执行", "阶段 3/6：检测并应用镜像源", 2 / 6)
+        _set_task("正在执行", "阶段 3/7：检测并应用镜像源", 2 / 7)
         LOG.push("--- 自动测速并应用 Docker 镜像源 ---")
         results = await sources.test_all(sources.DOCKER_MIRRORS, sources.docker_mirror_url)
         best = sources.pick_best(results)
@@ -505,20 +506,28 @@ async def _auto_deploy():
             _show_failure("镜像源应用", output, f"命令执行失败，退出码 {code}")
             return
 
+        image_title = "准备组件" if bundle_configured() else "检查组件镜像"
+        _set_task("正在执行", f"阶段 4/7：{image_title}", 3 / 7)
+        LOG.push(f"--- {image_title} ---")
+        code, output = await _run_tracked(image_prepare_cmds())
+        if code != 0:
+            _show_failure(image_title, output, "组件镜像尚未准备好")
+            return
+
         deploy_stages = [
             ("安装 AstrBot", ASTRBOT_CMDS),
             ("安装 SnowLuma", snowluma_cmds(STATE["proxy"]["prefix"] if STATE["proxy"] else "")),
             ("装配套插件", PLUGIN_INSTALL_CMDS),
         ]
-        for index, (title, cmds) in enumerate(deploy_stages, start=4):
-            _set_task("正在执行", f"阶段 {index}/6：{title}", (index - 1) / 6)
+        for index, (title, cmds) in enumerate(deploy_stages, start=5):
+            _set_task("正在执行", f"阶段 {index}/7：{title}", (index - 1) / 7)
             LOG.push(f"--- {title} ---")
             code, output = await _run_tracked(cmds)
             if code != 0:
                 _show_failure(title, output, f"命令执行失败，退出码 {code}")
                 return
 
-        _set_task("部署完成", "六个阶段全部完成", 1)
+        _set_task("部署完成", "七个阶段全部完成", 1)
         LOG.push("===== 一键自动部署完成 =====")
         ui.notify("自动部署完成，请查看凭据并按教程登录 QQ", type="positive")
     except Exception as exc:
