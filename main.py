@@ -686,7 +686,11 @@ CSS += """
 
 CSS += """
 /* Final layout pass */
-.tg-actions { display: flex !important; width: 100% !important; }
+.tg-actions, .tg-novnc-actions { display: flex !important; flex-direction: column !important; width: 100% !important; align-items: stretch !important; }
+.tg-port-input { width: 100% !important; max-width: 560px !important; }
+.tg-port-input .q-field__control { background: rgba(18,30,34,.46) !important; border: 1px solid rgba(192,211,205,.28) !important; border-radius: 12px !important; color: #dce9e5 !important; }
+.tg-port-input .q-field__label, .tg-port-input .q-field__native { color: #dce9e5 !important; }
+.tg-port-input .q-field__control:before, .tg-port-input .q-field__control:after { display: none !important; }
 .tg-utility { width: 100% !important; min-height: 56px !important; margin: 8px 0 !important; }
 .q-btn.tg-utility {
   justify-content: flex-start !important; padding: 0 20px !important;
@@ -1250,8 +1254,8 @@ def credential_section():
         '<small>如果服务商没有把外部端口映射到内部 6081，noVNC 无法打开。</small></span>'
         '</div>', sanitize=False
     )
-    with ui.row().classes("w-full items-end gap-2"):
-        novnc_port = ui.input("noVNC 外部端口", value="6081").props("type=number min=1 max=65535").classes("flex-1")
+    with ui.column().classes("tg-novnc-actions w-full gap-2"):
+        novnc_port = ui.input("noVNC 外部端口", value="6081").props("type=number min=1 max=65535 outlined").classes("tg-port-input w-full")
         async def open_novnc():
             try:
                 port = int(str(novnc_port.value or "").strip())
@@ -1263,7 +1267,7 @@ def credential_section():
             await ui.run_javascript(
                 "window.open('http://' + window.location.hostname + ':' + %d + '/vnc.html?autoconnect=1', '_blank')" % port
             )
-        ui.button("打开 noVNC", icon="open_in_new", on_click=open_novnc).props("unelevated no-caps").classes("tg-utility w-full")
+        ui.button("打开 noVNC", icon="open_in_new", on_click=open_novnc).props("unelevated no-caps color=dark").classes("tg-utility w-full")
     ui.label("各服务的内部端口").classes("text-sm font-semibold mt-4 opacity-80")
     ui.html(_port_table_html(), sanitize=False)
 
