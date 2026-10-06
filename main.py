@@ -34,6 +34,7 @@ from core import offline
 
 STATE = {"busy": False, "mirror": None, "proxy": None}
 LOG = None
+DEPLOY_VIEW = {"status": None, "stage": None, "progress": None}
 
 # ---------------------------------------------------------------- 外观
 
@@ -372,22 +373,45 @@ def _fmt(r: dict) -> str:
     return f"不可用（{res.get('err') or res.get('status')}）"
 
 
+def _set_task(status: str, stage: str = "", progress: float | None = None) -> None:
+    DEPLOY_VIEW["status"] = status
+    DEPLOY_VIEW["stage"] = stage
+    DEPLOY_VIEW["progress"] = progress
+    if DEPLOY_VIEW.get("status_label"):
+        DEPLOY_VIEW["status_label"].text = status
+        DEPLOY_VIEW["stage_label"].text = stage
+        if progress is None:
+            DEPLOY_VIEW["progress_bar"].visible = False
+        else:
+            DEPLOY_VIEW["progress_bar"].visible = True
+            DEPLOY_VIEW["progress_bar"].value = progress
+        DEPLOY_VIEW["status_label"].update()
+        DEPLOY_VIEW["stage_label"].update()
+        DEPLOY_VIEW["progress_bar"].update()
+
 def _guard() -> bool:
     if STATE["busy"]:
         ui.notify("有任务正在执行，请等它结束。", type="warning")
         return False
     STATE["busy"] = True
+    _set_task("任务已开始", "准备执行", 0)
+    ui.notify("任务已开始", type="info")
     return True
-
-
 async def _run(title: str, cmds: list):
+    _set_task("正在执行", title)
     LOG.push(f"===== {title} =====")
     try:
         code = await run_stream_all(cmds, LOG.push)
-        ui.notify(
-            f"{title} {'完成' if code == 0 else f'失败（退出码 {code}）'}",
-            type="positive" if code == 0 else "negative",
-        )
+        if code == 0:
+            _set_task("已完成", title, 1)
+            ui.notify(f"{title}完成", type="positive")
+        else:
+            _set_task("执行失败", f"{title}，退出码 {code}")
+            ui.notify(f"{title}失败（退出码 {code}）", type="negative")
+    except Exception as exc:
+        _set_task("执行失败", f"{title}：{exc}")
+        ui.notify(f"{title}异常中止", type="negative")
+        raise
     finally:
         STATE["busy"] = False
         LOG.push(f"===== {title} 结束 =====")
@@ -417,44 +441,46 @@ async def _auto_deploy():
     if not _guard():
         return
     LOG.push("===== 一键自动部署开始 =====")
+    # 六个阶段的顺序固定，进度按阶段编号更新。
     try:
-        for title, cmds in (("环境体检", CHECK_CMDS), ("安装 Docker", DOCKER_CMDS)):
+        for index, (title, cmds) in enumerate((("环境体检", CHECK_CMDS), ("安装 Docker", DOCKER_CMDS)), start=1):
+            _set_task("正在执行", f"阶段 {index}/6：{title}", (index - 1) / 6)
             LOG.push(f"--- {title} ---")
             code = await run_stream_all(cmds, LOG.push)
             if code != 0:
-                LOG.push(f"!! {title}失败。请只处理上面最后一条错误，再重新点击本按钮。")
-                ui.notify(f"{title}失败，请查看日志最后一条错误", type="negative")
-                return
+                raise RuntimeError(f"{title}失败，退出码 {code}")
 
+        _set_task("正在执行", "阶段 3/6：检测并应用镜像源", 2 / 6)
         LOG.push("--- 自动测速并应用 Docker 镜像源 ---")
         results = await sources.test_all(sources.DOCKER_MIRRORS, sources.docker_mirror_url)
         best = sources.pick_best(results)
         if not best:
-            LOG.push("!! 没有可用的 Docker 镜像源。请更换服务器线路，或准备代理/镜像中转。")
-            ui.notify("没有可用镜像源，自动部署已暂停", type="negative")
-            return
+            raise RuntimeError("没有可用的 Docker 镜像源；请更换服务器线路，或准备代理/镜像中转")
         STATE["mirror"] = best
         LOG.push(f"自动选中：{best['name']}（{best['result'].get('ms')} ms）")
         code = await run_stream_all(apply_mirror_cmds(best["url"]), LOG.push)
         if code != 0:
-            LOG.push("!! Docker 镜像源应用失败。请检查 Docker 服务状态后重新点击本按钮。")
-            ui.notify("镜像源应用失败，自动部署已暂停", type="negative")
-            return
+            raise RuntimeError(f"镜像源应用失败，退出码 {code}")
 
-        stages = [
+        deploy_stages = [
             ("安装 AstrBot", ASTRBOT_CMDS),
             ("安装 SnowLuma", snowluma_cmds(STATE["proxy"]["prefix"] if STATE["proxy"] else "")),
             ("装配套插件", PLUGIN_INSTALL_CMDS),
         ]
-        for title, cmds in stages:
+        for index, (title, cmds) in enumerate(deploy_stages, start=4):
+            _set_task("正在执行", f"阶段 {index}/6：{title}", (index - 1) / 6)
             LOG.push(f"--- {title} ---")
             code = await run_stream_all(cmds, LOG.push)
             if code != 0:
-                LOG.push(f"!! {title}失败。请只处理上面最后一条错误，再重新点击本按钮。")
-                ui.notify(f"{title}失败，请查看日志最后一条错误", type="negative")
-                return
+                raise RuntimeError(f"{title}失败，退出码 {code}")
+
+        _set_task("部署完成", "六个阶段全部完成", 1)
         LOG.push("===== 一键自动部署完成 =====")
         ui.notify("自动部署完成，请查看凭据并按教程登录 QQ", type="positive")
+    except Exception as exc:
+        _set_task("部署失败", str(exc))
+        LOG.push(f"!! {exc}。请处理上面最后一条错误后重试。")
+        ui.notify(f"自动部署失败：{exc}", type="negative")
     finally:
         STATE["busy"] = False
         LOG.push("===== 一键自动部署结束 =====")
@@ -733,7 +759,20 @@ def index():
 
     # 主区
     with ui.column().classes("tg-main w-full max-w-5xl mx-auto gap-4 p-4"):
-
+        with ui.card().classes("tg-card w-full"):
+            with ui.row().classes("w-full items-center justify-between"):
+                ui.label("部署进度").classes("text-sm font-semibold opacity-70")
+                status_label = ui.label(DEPLOY_VIEW.get("status") or "尚未开始").classes("text-sm font-semibold")
+            stage_label = ui.label(DEPLOY_VIEW.get("stage") or "等待任务").classes("text-sm opacity-75")
+            progress_bar = ui.linear_progress(value=DEPLOY_VIEW.get("progress") or 0).classes("w-full")
+            DEPLOY_VIEW["status_label"] = status_label
+            DEPLOY_VIEW["stage_label"] = stage_label
+            DEPLOY_VIEW["progress_bar"] = progress_bar
+            if DEPLOY_VIEW.get("progress") is None:
+                progress_bar.visible = False
+            with ui.row().classes("items-center gap-2"):
+                ui.icon("info").classes("opacity-60")
+                ui.label("开始任务后，这里会显示当前阶段、进度和最终结果。").classes("text-xs opacity-60")
         with ui.card().classes("tg-card w-full"):
             ui.label("新手入口").classes("text-sm font-semibold opacity-70")
             ui.label("只点下面这一个按钮。面板会按正确顺序完成体检、Docker、换源和组件部署。失败时看日志最后一条。").classes("text-sm opacity-75")
