@@ -50,7 +50,7 @@ def _configure_snowluma(token: str) -> None:
         check=True,
         timeout=30,
     )
-    subprocess.run(["docker", "restart", "snowluma"], check=True, timeout=30)
+    # 不重启 SnowLuma，避免 QQ 会话被强制退出；由控制台热重载或手动点击重连。
 
 
 def _setup_sync(password: str) -> str:
@@ -85,7 +85,7 @@ def _setup_sync(password: str) -> str:
         _request("/api/v1/bots", method="POST", payload=config, token=token)
         message = "AstrBot 平台配置已创建"
     _configure_snowluma(ws_token)
-    return message + "，SnowLuma Token 已同步"
+    return message + "，SnowLuma Token 已写入；请在 SnowLuma 控制台点击重连，不会强制退出 QQ"
 
 
 async def setup_after_qq_login(password: str) -> str:
