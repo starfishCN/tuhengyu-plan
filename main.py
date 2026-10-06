@@ -395,7 +395,54 @@ html:not(.tg-in) .tg-main > * {
   .tg-table th { padding: 7px 8px; font-size: .66rem; }
   .tg-table td { padding: 10px 8px; }
   .tg-card { border-radius: 13px !important; }
+ }
+
+/* ---------- V2 视觉系统：Infrastructure Control Room ---------- */
+:root {
+  --ink: #07111f; --panel: rgba(10,21,35,.78); --line: rgba(148,196,220,.18);
+  --muted: #8da5b8; --white: #eaf6ff; --cyan: #54e6ff; --mint: #63f5c7;
+  --blue: #6687ff; --amber: #ffc857;
 }
+html, body { background: #050b14 !important; color: var(--white); }
+body {
+  position: relative; overflow-x: hidden;
+  background-image: linear-gradient(rgba(84,230,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(84,230,255,.035) 1px, transparent 1px), radial-gradient(ellipse at 20% 0%, rgba(0,173,255,.20), transparent 43%), radial-gradient(ellipse at 92% 18%, rgba(99,245,199,.10), transparent 32%), linear-gradient(135deg, #050b14, #071423 55%, #08111d) !important;
+  background-size: 42px 42px, 42px 42px, auto, auto, auto !important; background-attachment: fixed !important;
+}
+body::before { content: ""; position: fixed; z-index: -1; inset: -30%; pointer-events: none; background: conic-gradient(from 90deg, transparent, rgba(84,230,255,.08), transparent 28%, rgba(99,245,199,.06), transparent 58%); animation: tg-radar 20s linear infinite; }
+body::after { content: ""; position: fixed; z-index: -1; left: 0; right: 0; top: -20%; height: 25%; pointer-events: none; background: linear-gradient(180deg, transparent, rgba(84,230,255,.08), transparent); filter: blur(10px); animation: tg-scan 8s ease-in-out infinite; }
+@keyframes tg-radar { to { transform: rotate(360deg); } }
+@keyframes tg-scan { 0%,100% { transform: translateY(-20vh); opacity: 0; } 35%,65% { opacity: 1; } 100% { transform: translateY(520vh); opacity: 0; } }
+.tg-brand { background: rgba(5,12,23,.76) !important; border-bottom: 1px solid var(--line) !important; box-shadow: 0 1px 0 rgba(84,230,255,.06), 0 16px 45px rgba(0,0,0,.22); backdrop-filter: blur(18px); }
+.tg-brand::after { content: "SYSTEM / DEPLOYMENT NODE"; margin-left: auto; color: rgba(141,165,184,.58); font: 700 .61rem ui-monospace,monospace; letter-spacing: .16em; }
+.tg-title { background: linear-gradient(90deg,#eaf6ff,var(--cyan),var(--mint)) !important; -webkit-background-clip: text !important; background-clip: text !important; }
+.tg-sub { color: var(--muted); opacity: 1 !important; }
+.tg-main { max-width: 960px !important; padding-top: 2.8rem !important; padding-bottom: 4rem !important; }
+.tg-card { background: var(--panel) !important; border: 1px solid var(--line) !important; border-radius: 20px !important; box-shadow: 0 24px 80px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.05) !important; backdrop-filter: blur(20px); }
+.tg-hero { padding: 2.1rem !important; background: linear-gradient(135deg,rgba(15,38,57,.92),rgba(8,20,34,.82) 62%,rgba(13,41,48,.88)) !important; border-color: rgba(84,230,255,.28) !important; box-shadow: 0 28px 100px rgba(0,0,0,.42), 0 0 70px rgba(0,173,255,.08) !important; }
+.tg-hero::after { width: 420px; height: 420px; right: -180px; top: -250px; background: radial-gradient(circle,rgba(84,230,255,.18),transparent 67%); filter: blur(0); animation: tg-pulse-orbit 8s ease-in-out infinite alternate; }
+@keyframes tg-pulse-orbit { to { transform: translate(-80px,80px) scale(1.2); opacity: .45; } }
+.tg-kicker { color: var(--cyan) !important; letter-spacing: .24em; }
+.tg-flow { position: relative; z-index: 1; gap: 0; margin: 28px 0 24px; padding: 0 4px; }
+.tg-flow::before { content: ""; position: absolute; left: 9%; right: 9%; top: 26px; height: 1px; background: linear-gradient(90deg,transparent,var(--cyan),var(--mint),transparent); opacity: .48; }
+.tg-flow-item { z-index: 1; min-height: 112px; padding: 15px 14px; background: rgba(3,13,25,.58) !important; border: 1px solid rgba(132,187,213,.19) !important; border-radius: 15px; box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+.tg-flow-item:hover { transform: translateY(-6px) !important; border-color: rgba(84,230,255,.65) !important; box-shadow: 0 18px 35px rgba(0,0,0,.26), 0 0 28px rgba(84,230,255,.10) !important; }
+.tg-flow-badge { width: 38px; height: 38px; margin-bottom: 18px; border-radius: 12px; background: linear-gradient(145deg,var(--cyan),#3372ff 70%) !important; color: #04111e; box-shadow: 0 0 0 1px rgba(84,230,255,.4), 0 0 24px rgba(84,230,255,.25) !important; }
+.tg-flow-item:nth-child(2) .tg-flow-badge { background: linear-gradient(145deg,var(--mint),#1e9cba) !important; }
+.tg-flow-item:nth-child(3) .tg-flow-badge { background: linear-gradient(145deg,#b3a4ff,#6877ff) !important; }
+.tg-flow-text { color: #dcecf5 !important; font-size: .88rem; }
+.tg-nat { color: #ffe8a3 !important; background: rgba(104,74,18,.18) !important; border-color: rgba(255,200,87,.35) !important; }
+.tg-nat strong { color: var(--amber) !important; }
+.tg-cta { min-height: 72px !important; border-radius: 15px !important; border-color: rgba(255,255,255,.24) !important; box-shadow: 0 14px 28px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.32) !important; }
+.tg-cta-primary { background: linear-gradient(120deg,#097eae,#3264e8 52%,#584bd2) !important; }
+.tg-cta-secondary { background: linear-gradient(120deg,#087d86,#159e9b 52%,#3f8dce) !important; }
+.tg-cta:hover { box-shadow: 0 22px 42px rgba(0,0,0,.34), 0 0 0 1px rgba(84,230,255,.55), 0 0 30px rgba(84,230,255,.16) !important; }
+.tg-status { background: rgba(5,16,28,.70) !important; border-color: rgba(99,245,199,.18) !important; }
+.tg-status .q-linear-progress { height: 10px !important; background: rgba(141,165,184,.14) !important; box-shadow: inset 0 1px 4px rgba(0,0,0,.32); }
+.tg-status .q-linear-progress__model { background: linear-gradient(90deg,var(--cyan),var(--mint)) !important; box-shadow: 0 0 18px rgba(84,230,255,.65); }
+.tg-status-percent { color: var(--mint) !important; text-shadow: 0 0 12px rgba(99,245,199,.35); }
+.tg-step { color: #cce8f3 !important; background: rgba(12,31,47,.82) !important; border-color: rgba(132,187,213,.24) !important; }
+@media (max-width: 640px) { .tg-brand::after { display: none; } .tg-main { padding-top: 1.25rem !important; } .tg-hero { padding: 1.25rem !important; } .tg-flow { gap: 7px; } .tg-flow::before { display: none; } .tg-flow-item { min-height: 0; padding: 11px 12px; } .tg-flow-badge { width: 31px; height: 31px; margin: 0 8px 0 0; vertical-align: middle; } .tg-flow-text { display: inline; } }
 """
 
 # 复制函数：http 下 navigator.clipboard 不可用，必须回退到 execCommand
