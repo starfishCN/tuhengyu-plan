@@ -205,9 +205,18 @@ html:not(.tg-in) .tg-main > * {
   transform: translateY(-3px); border-color: #7dd3fc;
   box-shadow: 0 8px 20px rgba(14,165,233,.12);
 }
-.tg-flow-item::before {
-  content: ""; display: block; width: 7px; height: 7px; margin-bottom: 12px;
-  border-radius: 50%; background: #0ea5e9; box-shadow: 0 0 0 4px #e0f2fe;
+.tg-flow-item::before { display: none; }
+.tg-flow-badge {
+  display: inline-grid; place-items: center; width: 28px; height: 28px;
+  margin-bottom: 12px; border-radius: 9px;
+  color: #fff; font: 800 .82rem ui-monospace, monospace;
+  background: linear-gradient(135deg, #0284c7, #4f46e5);
+  box-shadow: 0 5px 12px rgba(37,99,235,.25), 0 0 0 4px rgba(14,165,233,.08);
+  transition: transform .28s cubic-bezier(.22,1,.36,1), box-shadow .28s ease;
+}
+.tg-flow-item:hover .tg-flow-badge {
+  transform: translateY(-3px) rotate(-6deg) scale(1.08);
+  box-shadow: 0 8px 18px rgba(37,99,235,.34), 0 0 0 6px rgba(14,165,233,.12);
 }
 .tg-flow-text { display: block; color: #0f172a; font-size: .84rem; font-weight: 650; line-height: 1.4; }
 .tg-nat {
@@ -221,6 +230,7 @@ html:not(.tg-in) .tg-main > * {
 .body--dark .tg-hero { background: rgba(15,23,42,.82) !important; border-color: rgba(148,163,184,.2) !important; }
 .body--dark .tg-flow-item { background: rgba(30,41,59,.72); border-color: rgba(148,163,184,.22); }
 .body--dark .tg-flow-text { color: #e2e8f0; }
+.body--dark .tg-flow-badge { box-shadow: 0 5px 14px rgba(37,99,235,.38), 0 0 0 4px rgba(56,189,248,.12); }
 @media (max-width: 640px) {
   .tg-flow { grid-template-columns: 1fr; gap: 7px; }
   .tg-flow-item { min-height: 0; padding: 10px 12px; }
@@ -972,9 +982,9 @@ def index():
             ui.label("按顺序完成下面三步。面板会处理安装、连接和配置。你只需要扫码，并输入当前 AstrBot 密码。").classes("text-sm opacity-75 mt-1")
             ui.html(
                 '<div class="tg-flow">'
-                '<div class="tg-flow-item"><span class="tg-flow-text">部署必要软件</span></div>'
-                '<div class="tg-flow-item"><span class="tg-flow-text">noVNC 扫码登录 QQ</span></div>'
-                '<div class="tg-flow-item"><span class="tg-flow-text">输入密码完成设置</span></div>'
+                '<div class="tg-flow-item"><span class="tg-flow-badge">1</span><span class="tg-flow-text">部署必要软件</span></div>'
+                '<div class="tg-flow-item"><span class="tg-flow-badge">2</span><span class="tg-flow-text">noVNC 扫码登录 QQ</span></div>'
+                '<div class="tg-flow-item"><span class="tg-flow-badge">3</span><span class="tg-flow-text">输入密码完成设置</span></div>'
                 '</div>', sanitize=False
             )
             with ui.row().classes("w-full gap-2"):
