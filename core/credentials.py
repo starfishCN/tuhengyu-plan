@@ -4,7 +4,7 @@
 实测确认三个来源：
 
   - noVNC     : 容器环境变量 VNC_PASSWD（部署时写入，**稳定**）
-  - AstrBot   : 启动日志 "➜ Initial password: xxx"（**仅首次启动**打印）
+  - AstrBot   : /AstrBot/data/cmd_config.json 的 dashboard.password（初始密码）；旧版本回退启动日志
   - SnowLuma  : 启动日志 "initial credentials: user=admin password=xxx"
                 （改密后失效；**未改密时重启会重新生成**）
 
@@ -28,10 +28,11 @@ PROBES = [
         "astrbot",
         "AstrBot 控制台",
         6185,
-        "docker logs astrbot 2>&1 "
-        "| grep -E 'Initial password' | tail -n 1 "
-        "| sed -E 's/.*Initial password: *//' | tr -d '\\r'",
-        "来自启动日志，仅首次启动打印；改密后此处不再有效",
+        "value=$(docker exec astrbot awk -F '\"' '/password/ {print $4; exit}' /AstrBot/data/cmd_config.json 2>/dev/null); "
+        "if test -n \"$value\"; then printf '%s\\n' \"$value\"; else "
+        "docker logs astrbot 2>&1 | grep -E 'Initial password' | tail -n 1 "
+        "| sed -E 's/.*Initial password: *//' | tr -d '\\r'; fi",
+        "优先读取配置中的初始密码；旧版本回退启动日志。改密后此处可能是旧值",
     ),
     (
         "snowluma",
