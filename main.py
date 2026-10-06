@@ -373,6 +373,31 @@ def _fmt(r: dict) -> str:
     return f"不可用（{res.get('err') or res.get('status')}）"
 
 
+def _diagnose_failure(output: list[str], fallback: str) -> tuple[str, str, str]:
+    text = "\n".join(output[-120:])
+    rules = (
+        (("no space left", "disk quota exceeded"), "磁盘空间不足", "清理无用镜像、容器日志或扩容磁盘后重试。"),
+        (("connection timed out", "i/o timeout", "TLS handshake timeout"), "网络连接超时", "检查 VPS 出站网络；若镜像层 CDN 不通，使用离线镜像上传导入。"),
+        (("no such file or directory", "test -d", "cannot stat"), "所需文件或目录不存在", "确认面板源码包包含对应目录，并检查安装路径和文件权限。"),
+        (("permission denied", "operation not permitted"), "权限不足", "检查面板运行用户对目标目录、Docker socket 和系统服务的权限。"),
+        (("address already in use", "port is already allocated", "bind: address"), "端口已被占用", "检查占用进程并释放端口，或调整服务端口映射。"),
+        (("unauthorized", "authentication required", "denied: requested access"), "镜像仓库认证失败或无权访问", "核对镜像名称、标签及仓库凭据；公开镜像仍失败时检查镜像源。"),
+        (("manifest unknown", "not found: manifest"), "镜像或标签不存在", "核对镜像仓库地址和标签，使用该项目实际发布的标签。"),
+        (("could not resolve", "temporary failure in name resolution", "no such host"), "DNS 解析失败", "检查 VPS DNS 与出站策略，确认目标域名可解析。"),
+        (("dpkg was interrupted", "unmet dependencies", "unable to correct problems"), "系统软件包安装失败", "按日志修复 apt/dpkg 状态后重试，避免并行运行系统更新。"),
+        (("yaml", "compose config", "invalid compose"), "Compose 配置无效", "检查 YAML 缩进、必填环境变量和 Docker Compose 版本。"),
+    )
+    lowered = text.lower()
+    for needles, reason, solution in rules:
+        if any(needle in lowered for needle in needles):
+            break
+    else:
+        reason = fallback
+        solution = "查看日志中首个报错及其前后内容；当前特征未匹配到已知故障类型。"
+    error_lines = [line.strip() for line in output if line.strip() and ("error" in line.lower() or "failed" in line.lower() or "失败" in line or "denied" in line.lower() or "timeout" in line.lower())]
+    detail = error_lines[-1] if error_lines else (output[-1].strip() if output else "无命令输出")
+    return reason, solution, detail[:500]
+
 def _set_task(status: str, stage: str = "", progress: float | None = None) -> None:
     DEPLOY_VIEW["status"] = status
     DEPLOY_VIEW["stage"] = stage
@@ -382,12 +407,30 @@ def _set_task(status: str, stage: str = "", progress: float | None = None) -> No
         DEPLOY_VIEW["stage_label"].text = stage
         if progress is None:
             DEPLOY_VIEW["progress_bar"].visible = False
+            DEPLOY_VIEW["percent_label"].text = ""
         else:
+            percent = max(0, min(100, round(progress * 100)))
             DEPLOY_VIEW["progress_bar"].visible = True
-            DEPLOY_VIEW["progress_bar"].value = progress
+            DEPLOY_VIEW["progress_bar"].value = percent / 100
+            DEPLOY_VIEW["percent_label"].text = f"{percent}%"
         DEPLOY_VIEW["status_label"].update()
         DEPLOY_VIEW["stage_label"].update()
         DEPLOY_VIEW["progress_bar"].update()
+        DEPLOY_VIEW["percent_label"].update()
+async def _run_tracked(cmds: list) -> tuple[int, list[str]]:
+    output = []
+    def record(line: str) -> None:
+        output.append(line)
+        LOG.push(line)
+    code = await run_stream_all(cmds, record)
+    return code, output
+
+def _show_failure(title: str, output: list[str], fallback: str) -> tuple[str, str, str]:
+    reason, solution, detail = _diagnose_failure(output, fallback)
+    stage = f"{title}。原因：{reason}。建议：{solution}。日志：{detail}"
+    _set_task("执行失败", stage)
+    ui.notify(f"{title}失败：{reason}。{solution}", type="negative", timeout=12000)
+    return reason, solution, detail
 
 def _guard() -> bool:
     if STATE["busy"]:
@@ -400,18 +443,16 @@ def _guard() -> bool:
 async def _run(title: str, cmds: list):
     _set_task("正在执行", title)
     LOG.push(f"===== {title} =====")
+    output = []
     try:
-        code = await run_stream_all(cmds, LOG.push)
+        code, output = await _run_tracked(cmds)
         if code == 0:
             _set_task("已完成", title, 1)
             ui.notify(f"{title}完成", type="positive")
         else:
-            _set_task("执行失败", f"{title}，退出码 {code}")
-            ui.notify(f"{title}失败（退出码 {code}）", type="negative")
+            _show_failure(title, output, f"命令执行失败，退出码 {code}")
     except Exception as exc:
-        _set_task("执行失败", f"{title}：{exc}")
-        ui.notify(f"{title}异常中止", type="negative")
-        raise
+        _show_failure(title, output, f"任务异常中止：{exc}")
     finally:
         STATE["busy"] = False
         LOG.push(f"===== {title} 结束 =====")
@@ -446,9 +487,10 @@ async def _auto_deploy():
         for index, (title, cmds) in enumerate((("环境体检", CHECK_CMDS), ("安装 Docker", DOCKER_CMDS)), start=1):
             _set_task("正在执行", f"阶段 {index}/6：{title}", (index - 1) / 6)
             LOG.push(f"--- {title} ---")
-            code = await run_stream_all(cmds, LOG.push)
+            code, output = await _run_tracked(cmds)
             if code != 0:
-                raise RuntimeError(f"{title}失败，退出码 {code}")
+                _show_failure(title, output, f"命令执行失败，退出码 {code}")
+                return
 
         _set_task("正在执行", "阶段 3/6：检测并应用镜像源", 2 / 6)
         LOG.push("--- 自动测速并应用 Docker 镜像源 ---")
@@ -458,9 +500,10 @@ async def _auto_deploy():
             raise RuntimeError("没有可用的 Docker 镜像源；请更换服务器线路，或准备代理/镜像中转")
         STATE["mirror"] = best
         LOG.push(f"自动选中：{best['name']}（{best['result'].get('ms')} ms）")
-        code = await run_stream_all(apply_mirror_cmds(best["url"]), LOG.push)
+        code, output = await _run_tracked(apply_mirror_cmds(best["url"]))
         if code != 0:
-            raise RuntimeError(f"镜像源应用失败，退出码 {code}")
+            _show_failure("镜像源应用", output, f"命令执行失败，退出码 {code}")
+            return
 
         deploy_stages = [
             ("安装 AstrBot", ASTRBOT_CMDS),
@@ -470,17 +513,19 @@ async def _auto_deploy():
         for index, (title, cmds) in enumerate(deploy_stages, start=4):
             _set_task("正在执行", f"阶段 {index}/6：{title}", (index - 1) / 6)
             LOG.push(f"--- {title} ---")
-            code = await run_stream_all(cmds, LOG.push)
+            code, output = await _run_tracked(cmds)
             if code != 0:
-                raise RuntimeError(f"{title}失败，退出码 {code}")
+                _show_failure(title, output, f"命令执行失败，退出码 {code}")
+                return
 
         _set_task("部署完成", "六个阶段全部完成", 1)
         LOG.push("===== 一键自动部署完成 =====")
         ui.notify("自动部署完成，请查看凭据并按教程登录 QQ", type="positive")
     except Exception as exc:
-        _set_task("部署失败", str(exc))
-        LOG.push(f"!! {exc}。请处理上面最后一条错误后重试。")
-        ui.notify(f"自动部署失败：{exc}", type="negative")
+        reason, solution, detail = _diagnose_failure([str(exc)], "自动部署中断")
+        _set_task("部署失败", f"原因：{reason}。建议：{solution}。详情：{detail}")
+        LOG.push(f"!! 原因：{reason}。建议：{solution}。详情：{detail}")
+        ui.notify(f"自动部署失败：{reason}。{solution}", type="negative", timeout=12000)
     finally:
         STATE["busy"] = False
         LOG.push("===== 一键自动部署结束 =====")
@@ -762,9 +807,14 @@ def index():
         with ui.card().classes("tg-card w-full"):
             with ui.row().classes("w-full items-center justify-between"):
                 ui.label("部署进度").classes("text-sm font-semibold opacity-70")
-                status_label = ui.label(DEPLOY_VIEW.get("status") or "尚未开始").classes("text-sm font-semibold")
+                with ui.row().classes("items-center gap-2"):
+                    percent_label = ui.label("").classes("text-sm font-semibold tabular-nums")
+                    status_label = ui.label(DEPLOY_VIEW.get("status") or "尚未开始").classes("text-sm font-semibold")
             stage_label = ui.label(DEPLOY_VIEW.get("stage") or "等待任务").classes("text-sm opacity-75")
             progress_bar = ui.linear_progress(value=DEPLOY_VIEW.get("progress") or 0).classes("w-full")
+            DEPLOY_VIEW["percent_label"] = percent_label
+            if DEPLOY_VIEW.get("progress") is not None:
+                percent_label.text = f"{round(DEPLOY_VIEW['progress'] * 100)}%"
             DEPLOY_VIEW["status_label"] = status_label
             DEPLOY_VIEW["stage_label"] = stage_label
             DEPLOY_VIEW["progress_bar"] = progress_bar
