@@ -687,6 +687,19 @@ CSS += """
 CSS += """
 /* Final layout pass */
 .tg-actions { display: flex !important; width: 100% !important; }
+.tg-utility { width: 100% !important; min-height: 56px !important; margin: 8px 0 !important; }
+.q-btn.tg-utility {
+  justify-content: flex-start !important; padding: 0 20px !important;
+  color: #dce9e5 !important; background: rgba(28,39,43,.52) !important;
+  border: 1px solid rgba(192,211,205,.28) !important; border-radius: 12px !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 8px 18px rgba(0,0,0,.18) !important;
+  backdrop-filter: blur(16px) saturate(130%) !important;
+  transition: transform .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease !important;
+}
+.q-btn.tg-utility .q-btn__content { width: 100% !important; justify-content: flex-start !important; gap: 12px !important; }
+.q-btn.tg-utility .q-icon { color: #c2d8d0 !important; filter: none !important; }
+.q-btn.tg-utility:hover { background: rgba(59,75,73,.62) !important; border-color: rgba(220,235,225,.58) !important; transform: translateX(4px) !important; box-shadow: inset 3px 0 0 rgba(220,235,225,.6), 0 12px 24px rgba(0,0,0,.26) !important; }
+@media (min-width: 641px) { .tg-utility { max-width: 560px !important; } }
 .q-btn.tg-deploy, .q-btn.tg-finish {
   width: 100% !important; min-height: 58px !important; justify-content: flex-start !important;
   padding: 0 22px !important; border-radius: 13px !important;
@@ -1227,7 +1240,7 @@ def credential_section():
         with box:
             ui.html(_cred_table_html(rows), sanitize=False)
 
-    ui.button("读取 / 刷新", icon="key", on_click=refresh).classes("tg-step")
+    ui.button("读取 / 刷新", icon="key", on_click=refresh).props("unelevated no-caps").classes("tg-utility w-full")
     ui.label("打开 noVNC").classes("text-sm font-semibold mt-4 opacity-80")
     ui.html(
         '<div class="tg-nat">'
@@ -1250,7 +1263,7 @@ def credential_section():
             await ui.run_javascript(
                 "window.open('http://' + window.location.hostname + ':' + %d + '/vnc.html?autoconnect=1', '_blank')" % port
             )
-        ui.button("打开 noVNC", icon="open_in_new", on_click=open_novnc).classes("tg-step")
+        ui.button("打开 noVNC", icon="open_in_new", on_click=open_novnc).props("unelevated no-caps").classes("tg-utility w-full")
     ui.label("各服务的内部端口").classes("text-sm font-semibold mt-4 opacity-80")
     ui.html(_port_table_html(), sanitize=False)
 
