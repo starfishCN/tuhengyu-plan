@@ -35,9 +35,15 @@ def snowluma_cmds(proxy_prefix: str = "") -> list:
         fetch = f"curl -fsSL {url} -o /tmp/snowluma_install.sh"
         run = "bash /tmp/snowluma_install.sh --mode docker --yes"
     configure = [
-        "test -f ./vendor/snowluma_ws_config.js",
-        "docker cp ./vendor/snowluma_ws_config.js snowluma:/tmp/snowluma_ws_config.js",
-        "docker exec snowluma node /tmp/snowluma_ws_config.js",
-        "docker restart snowluma",
+        "test -f ./vendor/snowluma_ws_config.js || echo 'WS 配置文件不存在，跳过自动连接配置'",
+        "test -f ./vendor/snowluma_ws_config.js && docker cp ./vendor/snowluma_ws_config.js snowluma:/tmp/snowluma_ws_config.js || true",
+        "test -f ./vendor/snowluma_ws_config.js && docker exec snowluma node /tmp/snowluma_ws_config.js || echo 'WS 自动配置失败，稍后可在 SnowLuma 面板中手动配置'",
+        "docker restart snowluma >/dev/null 2>&1 || echo 'SnowLuma 重启跳过，容器可能正在启动'",
     ]
-    return [fetch, run, *configure, "docker ps --filter name=snowluma"]
+    return [
+        fetch,
+        run,
+        *configure,
+        "docker inspect -f '{{.State.Status}}' snowluma 2>/dev/null | grep -qx running || { echo 'SnowLuma 容器未运行'; exit 24; }",
+        "docker ps --filter name=snowluma",
+    ]
