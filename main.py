@@ -158,7 +158,41 @@ html:not(.tg-in) .tg-main > * {
   border: 1px solid rgba(148,163,184,.20) !important;
   box-shadow: 0 8px 28px rgba(0,0,0,.10) !important;
 }
-
+.tg-hero {
+  padding: 1.25rem !important;
+  background:
+    linear-gradient(135deg, rgba(34,211,238,.12), rgba(129,140,248,.08) 55%, rgba(15,23,42,.18)),
+    rgba(15,23,42,.42) !important;
+  border-color: rgba(34,211,238,.28) !important;
+}
+.tg-kicker {
+  color: #67e8f9; font-size: .72rem; font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase;
+}
+.tg-flow {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px; margin: 14px 0 18px;
+}
+.tg-flow-item {
+  padding: 10px 11px; border-radius: 10px;
+  background: rgba(15,23,42,.42); border: 1px solid rgba(148,163,184,.18);
+}
+.tg-flow-num { color: #67e8f9; font: 700 .72rem ui-monospace, monospace; }
+.tg-flow-text { display: block; margin-top: 4px; font-size: .82rem; line-height: 1.4; }
+.tg-nat {
+  display: flex; gap: 10px; align-items: flex-start;
+  margin: 12px 0; padding: 11px 12px; border-radius: 10px;
+  color: #fef3c7; background: rgba(245,158,11,.12);
+  border: 1px solid rgba(245,158,11,.34); line-height: 1.55;
+}
+.tg-nat strong { color: #fbbf24; white-space: nowrap; }
+.tg-nat small { display: block; opacity: .86; }
+@media (max-width: 640px) {
+  .tg-flow { grid-template-columns: 1fr; gap: 6px; }
+  .tg-flow-item { padding: 8px 10px; }
+  .tg-nat { display: block; }
+  .tg-nat strong { display: block; margin-bottom: 3px; }
+}
 /* ---------- 步骤按钮：毛玻璃 ---------- */
 .tg-step {
   border-radius: 12px !important;
@@ -814,7 +848,14 @@ def credential_section():
 
     ui.button("读取 / 刷新", icon="key", on_click=refresh).classes("tg-step")
     ui.label("打开 noVNC").classes("text-sm font-semibold mt-4 opacity-80")
-    ui.label("独立公网服务器填 6081。NAT 服务器必须填写服务商分配的外部端口；这个端口无法由服务器自动识别。").classes("text-xs opacity-70")
+    ui.html(
+        '<div class="tg-nat">'
+        '<strong>端口提示</strong>'
+        '<span><small>独立公网服务器填 <b>6081</b>。</small>'
+        '<small>NAT 服务器填服务商分配的外部端口，不要直接填内部端口 6081。</small>'
+        '<small>如果服务商没有把外部端口映射到内部 6081，noVNC 无法打开。</small></span>'
+        '</div>', sanitize=False
+    )
     with ui.row().classes("w-full items-end gap-2"):
         novnc_port = ui.input("noVNC 外部端口", value="6081").props("type=number min=1 max=65535").classes("flex-1")
         async def open_novnc():
@@ -858,13 +899,27 @@ def index():
     LOG = ui.log(max_lines=4000).classes("hidden")
     _brand_bar()
     with ui.column().classes("tg-main w-full max-w-2xl mx-auto gap-4 p-4"):
-        with ui.card().classes("tg-card w-full"):
-            ui.label("安装机器人").classes("text-xl font-semibold")
-            ui.label("按顺序完成两步。第一步安装软件，第二步在 QQ 扫码登录后自动配置连接。不要跳过顺序。")
-            ui.label("流程：部署必要软件 → 打开 noVNC 扫码登录 QQ → 输入当前 AstrBot 密码完成设置。").classes("text-sm opacity-75")
+        with ui.card().classes("tg-card tg-hero w-full"):
+            ui.label("QQ 机器人部署向导").classes("tg-kicker")
+            ui.label("把服务器变成你的机器人").classes("text-2xl font-semibold mt-1")
+            ui.label("按顺序完成下面三步。面板会处理安装、连接和配置。你只需要扫码，并输入当前 AstrBot 密码。").classes("text-sm opacity-75 mt-1")
+            ui.html(
+                '<div class="tg-flow">'
+                '<div class="tg-flow-item"><span class="tg-flow-num">01</span><span class="tg-flow-text">部署必要软件</span></div>'
+                '<div class="tg-flow-item"><span class="tg-flow-num">02</span><span class="tg-flow-text">noVNC 扫码登录 QQ</span></div>'
+                '<div class="tg-flow-item"><span class="tg-flow-num">03</span><span class="tg-flow-text">输入密码完成设置</span></div>'
+                '</div>', sanitize=False
+            )
             with ui.row().classes("w-full gap-2"):
                 ui.button("1. 部署必要软件", icon="rocket_launch", on_click=_auto_deploy).props("color=primary size=lg").classes("flex-1")
                 ui.button("2. 扫码后完成设置", icon="settings", on_click=_open_post_setup).props("color=secondary size=lg").classes("flex-1")
+            ui.html(
+                '<div class="tg-nat">'
+                '<strong>⚠ NAT 用户先看</strong>'
+                '<span><small>面板端口、noVNC 端口都要使用服务商分配的外部端口。</small>'
+                '<small>noVNC 默认填 <b>6081</b> 仅适用于独立公网服务器；NAT 请填映射到内部 <b>6081</b> 的外部端口。</small></span>'
+                '</div>', sanitize=False
+            )
         with ui.card().classes("tg-card w-full"):
             with ui.row().classes("w-full items-center justify-between"):
                 ui.label("安装状态").classes("text-sm font-semibold opacity-70")
