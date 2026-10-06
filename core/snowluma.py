@@ -26,19 +26,26 @@ VENDOR_SCRIPT = os.path.join(
 def snowluma_cmds(proxy_prefix: str = "") -> list:
     if os.path.isfile(VENDOR_SCRIPT):
         fetch = f"echo '使用内置安装脚本'; ls -l {VENDOR_SCRIPT}"
-        run = f"bash {VENDOR_SCRIPT} --mode docker --yes"
+        install = f"bash {VENDOR_SCRIPT} --mode docker --yes"
     else:
         if proxy_prefix:
             url = proxy_prefix.rstrip("/") + "/" + BASE_URL.replace("https://", "")
         else:
             url = BASE_URL
         fetch = f"curl -fsSL {url} -o /tmp/snowluma_install.sh"
-        run = "bash /tmp/snowluma_install.sh --mode docker --yes"
+        install = "bash /tmp/snowluma_install.sh --mode docker --yes"
+    run = (
+        "if docker inspect -f '{{.State.Status}}' snowluma 2>/dev/null | grep -qx running; "
+        "then echo 'SnowLuma 容器已运行，跳过重复安装'; "
+        f"else {install}; fi"
+    )
+    config_file = os.path.join(os.path.dirname(_CORE_DIR), "vendor", "snowluma_ws_config.js")
     configure = [
-        "test -f ./vendor/snowluma_ws_config.js || echo 'WS 配置文件不存在，跳过自动连接配置'",
-        "test -f ./vendor/snowluma_ws_config.js && docker cp ./vendor/snowluma_ws_config.js snowluma:/tmp/snowluma_ws_config.js || true",
-        "test -f ./vendor/snowluma_ws_config.js && docker exec snowluma node /tmp/snowluma_ws_config.js || echo 'WS 自动配置失败，稍后可在 SnowLuma 面板中手动配置'",
+        f"test -f {config_file} || echo 'WS 配置文件不存在，跳过自动连接配置'",
+        f"test -f {config_file} && docker cp {config_file} snowluma:/tmp/snowluma_ws_config.js || true",
+        "docker exec snowluma test -f /tmp/snowluma_ws_config.js && docker exec snowluma node /tmp/snowluma_ws_config.js || echo 'WS 自动配置失败，稍后可在 SnowLuma 面板中手动配置'",
         "docker restart snowluma >/dev/null 2>&1 || echo 'SnowLuma 重启跳过，容器可能正在启动'",
+
     ]
     return [
         fetch,
