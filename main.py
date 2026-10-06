@@ -813,8 +813,23 @@ def credential_section():
             ui.html(_cred_table_html(rows), sanitize=False)
 
     ui.button("读取 / 刷新", icon="key", on_click=refresh).classes("tg-step")
-
-    ui.label("各服务的端口").classes("text-sm font-semibold mt-4 opacity-80")
+    ui.label("打开 noVNC").classes("text-sm font-semibold mt-4 opacity-80")
+    ui.label("独立公网服务器填 6081。NAT 服务器必须填写服务商分配的外部端口；这个端口无法由服务器自动识别。").classes("text-xs opacity-70")
+    with ui.row().classes("w-full items-end gap-2"):
+        novnc_port = ui.input("noVNC 外部端口", value="6081").props("type=number min=1 max=65535").classes("flex-1")
+        async def open_novnc():
+            try:
+                port = int(str(novnc_port.value or "").strip())
+                if not 1 <= port <= 65535:
+                    raise ValueError
+            except ValueError:
+                ui.notify("请输入有效的外部端口", type="warning")
+                return
+            await ui.run_javascript(
+                "window.open('http://' + window.location.hostname + ':' + %d + '/vnc.html?autoconnect=1', '_blank')" % port
+            )
+        ui.button("打开 noVNC", icon="open_in_new", on_click=open_novnc).classes("tg-step")
+    ui.label("各服务的内部端口").classes("text-sm font-semibold mt-4 opacity-80")
     ui.html(_port_table_html(), sanitize=False)
 
 
