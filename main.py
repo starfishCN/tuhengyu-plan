@@ -718,6 +718,37 @@ CSS += """
 .tg-flow-item { background: rgba(12,34,45,.30) !important; }
 """
 
+CSS += """
+/* Unified button theme: obsidian glass + champagne light */
+.q-btn.tg-deploy, .q-btn.tg-finish, .q-btn.tg-utility {
+  position: relative !important; isolation: isolate !important; overflow: hidden !important;
+  color: #f0eee6 !important; background: rgba(38,40,40,.62) !important;
+  border: 1px solid rgba(220,211,181,.34) !important; border-radius: 13px !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.16), inset 0 -12px 24px rgba(218,190,116,.035), 0 10px 22px rgba(0,0,0,.22) !important;
+  transition: transform .24s cubic-bezier(.22,1,.36,1), background .24s ease, border-color .24s ease, box-shadow .24s ease !important;
+}
+.q-btn.tg-deploy::before, .q-btn.tg-finish::before, .q-btn.tg-utility::before {
+  content: "" !important; position: absolute !important; inset: 0 !important; z-index: -1 !important; pointer-events: none !important;
+  background: linear-gradient(105deg, transparent 16%, rgba(255,249,211,.48) 44%, rgba(255,255,255,.72) 50%, rgba(255,249,211,.32) 56%, transparent 82%) !important;
+  transform: translateX(-135%) !important; animation: tg-champagne-sweep 4.8s ease-in-out infinite !important;
+}
+@keyframes tg-champagne-sweep { 0%, 38% { transform: translateX(-135%); opacity: 0; } 48% { opacity: 1; } 66%, 100% { transform: translateX(135%); opacity: 0; } }
+.q-btn.tg-deploy:hover, .q-btn.tg-finish:hover, .q-btn.tg-utility:hover {
+  transform: translateY(-3px) !important; background: rgba(70,67,56,.72) !important;
+  border-color: rgba(255,235,172,.72) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 17px 34px rgba(0,0,0,.34), 0 0 26px rgba(239,204,118,.14) !important;
+}
+.q-btn.tg-deploy:active, .q-btn.tg-finish:active, .q-btn.tg-utility:active { transform: translateY(0) scale(.975) !important; }
+.q-btn.tg-deploy .q-icon, .q-btn.tg-finish .q-icon, .q-btn.tg-utility .q-icon { color: #f0d889 !important; filter: drop-shadow(0 0 7px rgba(244,214,128,.42)) !important; }
+.q-btn.tg-novnc-btn {
+  min-height: 64px !important; color: #fff8dc !important;
+  background: rgba(84,70,37,.62) !important; border-color: rgba(255,219,117,.78) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.28), inset 0 -14px 25px rgba(255,196,70,.09), 0 12px 26px rgba(0,0,0,.28), 0 0 18px rgba(245,204,99,.12) !important;
+}
+.q-btn.tg-novnc-btn::before { animation-duration: 2.8s !important; }
+.q-btn.tg-novnc-btn:hover { background: rgba(111,91,42,.78) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 20px 38px rgba(0,0,0,.38), 0 0 34px rgba(255,207,101,.25) !important; }
+"""
+
 # 复制函数：http 下 navigator.clipboard 不可用，必须用 execCommand 回退
 COPY_JS = """
 <script>
@@ -1267,7 +1298,7 @@ def credential_section():
             await ui.run_javascript(
                 "window.open('http://' + window.location.hostname + ':' + %d + '/vnc.html?autoconnect=1', '_blank')" % port
             )
-        ui.button("打开 noVNC", icon="open_in_new", on_click=open_novnc).props("unelevated no-caps color=dark").classes("tg-utility w-full")
+        ui.button("打开 noVNC", icon="open_in_new", on_click=open_novnc).props("unelevated no-caps").classes("tg-utility tg-novnc-btn w-full")
     ui.label("各服务的内部端口").classes("text-sm font-semibold mt-4 opacity-80")
     ui.html(_port_table_html(), sanitize=False)
 
