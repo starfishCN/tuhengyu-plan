@@ -5,6 +5,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/tuhengyu-panel
+EnvironmentFile=-/etc/tuhengyu-panel.env
 Environment=PANEL_USER=admin
 # 安装脚本会把这一行替换成随机生成的初始密码（不写死在仓库里）。
 # 首次登录后会强制改密，改完存在面板目录的 .panel_auth.json，这里就不再被使用。
